@@ -1,0 +1,342 @@
+:root {
+  color-scheme: light;
+  font-family: "Noto Sans KR", sans-serif;
+  background: #f7f8fb;
+  color: #222;
+  --bg: #f7f8fb;
+  --surface: #ffffff;
+  --surface-strong: #f8fafc;
+  --text: #111827;
+  --text-muted: #475569;
+  --border: #cbd5e1;
+  --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  --button-primary: #3b82f6;
+  --button-primary-hover: #2563eb;
+  --button-success: #16a34a;
+  --button-success-hover: #15803d;
+  --button-danger: #ef4444;
+  --button-danger-hover: #dc2626;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  background: #0f172a;
+  color: #e2e8f0;
+  --bg: #0f172a;
+  --surface: #111827;
+  --surface-strong: #1e293b;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --border: #334155;
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  --button-primary: #60a5fa;
+  --button-primary-hover: #3b82f6;
+  --button-success: #34d399;
+  --button-success-hover: #10b981;
+  --button-danger: #f87171;
+  --button-danger-hover: #ef4444;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+header {
+  position: relative;
+  margin-bottom: 24px;
+  padding: 24px;
+  background: var(--surface);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+header h1 {
+  margin: 0 0 12px;
+  font-size: clamp(1.9rem, 2.2vw, 2.8rem);
+}
+
+header p {
+  margin: 0 0 18px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+button {
+  font: inherit;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.header-actions {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+}
+
+#themeToggle {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--button-primary);
+  color: white;
+  border-radius: 12px;
+  transition: background 0.2s ease;
+}
+
+#themeToggle:hover {
+  background: var(--button-primary-hover);
+}
+
+#addItemBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 10px 14px;
+  background: var(--button-primary);
+  color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+  font-weight: 600;
+  transition: background 0.2s ease, filter 0.12s ease;
+}
+
+#addItemBtn:hover {
+  background: var(--button-primary-hover);
+  filter: brightness(1.03);
+}
+
+/* GitHub save button */
+.github-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 10px 14px;
+  background: linear-gradient(180deg, #24292e 0%, #2f363d 100%);
+  color: #fff;
+  border-radius: 12px;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
+  font-weight: 600;
+}
+
+.github-btn svg { display: block; }
+.github-btn:hover { filter: brightness(1.08); }
+
+.item-list {
+  display: grid;
+  gap: 18px;
+}
+
+.item-card {
+  background: var(--surface);
+  border-radius: 18px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.item-header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 18px 24px;
+  cursor: default;
+}
+
+.item-title-input {
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+}
+
+.item-title-input:focus {
+  outline: 2px solid var(--button-primary);
+  outline-offset: 2px;
+}
+
+.item-toggle {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--button-primary);
+  color: white;
+  border-radius: 12px;
+  transition: background 0.2s ease;
+}
+
+.item-toggle:hover {
+  background: var(--button-primary-hover);
+}
+
+.item-title {
+  font-weight: 700;
+}
+
+.item-chevron {
+  transition: transform 0.2s ease;
+}
+
+.item-card.open .item-chevron {
+  transform: rotate(180deg);
+}
+
+.item-details {
+  display: none;
+  padding: 0 24px 24px;
+  gap: 14px;
+}
+
+.item-card.open .item-details {
+  display: grid;
+}
+
+.field-row {
+  display: grid;
+  gap: 10px;
+}
+
+.field-row label {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.field-row input[type="text"],
+.field-row textarea,
+.field-row input[type="file"] {
+  width: 100%;
+  padding: 12px 14px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.98rem;
+}
+
+.field-row textarea {
+  height: auto;
+  min-height: 90px;
+  overflow: hidden;
+  resize: vertical;
+}
+
+.audio-row audio {
+  width: 100%;
+  border-radius: 14px;
+}
+
+.actions-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.save-btn,
+.remove-btn {
+  padding: 10px 16px;
+  border-radius: 12px;
+}
+
+.save-btn {
+  background: #16a34a;
+  color: white;
+}
+
+.save-btn:hover {
+  background: #15803d;
+}
+
+.remove-btn {
+  background: #ef4444;
+  color: white;
+}
+
+.remove-btn:hover {
+  background: #dc2626;
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    padding: 18px;
+  }
+
+  .item-toggle,
+  .item-details {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
+/* Modal styles for GitHub save */
+.modal {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2,6,23,0.45);
+  z-index: 80;
+}
+.modal[aria-hidden="false"] {
+  display: flex;
+}
+.modal-panel {
+  background: var(--surface);
+  padding: 18px;
+  border-radius: 12px;
+  width: min(720px, 96%);
+  box-shadow: var(--shadow);
+}
+.modal-panel h3 {
+  margin: 0 0 12px;
+}
+.modal-row {
+  margin-bottom: 10px;
+}
+.modal-row label {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.modal-row input[type="text"],
+.modal-row input[type="password"] {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+}
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "id": "item-hard-1",
+    "name": "예시 음원 1",
+    "lyrics": "이것은 예시 가사입니다.",
+    "notes": "저작권 확인 필요",
+    "audioDataUrl": "audio/example1.mp3"
+  },
+  {
+    "id": "item-hard-2",
+    "name": "예시 음원 2",
+    "lyrics": "두번째 예시 가사입니다.",
+    "notes": "메타데이터 추가 필요",
+    "audioDataUrl": "audio/example2.mp3"
+  }
+]
