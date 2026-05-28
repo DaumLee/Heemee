@@ -1,15 +1,19 @@
-const addItemBtn = document.getElementById("addItemBtn");
-const themeToggleBtn = document.getElementById("themeToggle");
 const itemList = document.getElementById("itemList");
 const itemTemplate = document.getElementById("itemTemplate");
 const STORAGE_KEY = "audioItemStorage";
-const THEME_KEY = "audioItemTheme";
+const DEFAULT_INFO_TEXT = "BPM: \nKey: \n구성: \n메모: ";
+
+const normalizeItem = (item) => ({
+  ...item,
+  info: item.info ?? DEFAULT_INFO_TEXT,
+});
 
 const loadItems = () => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return [];
   try {
-    return JSON.parse(saved);
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed.map(normalizeItem) : [];
   } catch (error) {
     console.error("저장된 데이터를 불러오는 중 오류가 발생했습니다.", error);
     return [];
@@ -20,43 +24,40 @@ const saveItems = (items) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 };
 
+const getItemDataFromCard = (card) => ({
+  id: card.dataset.itemId,
+  name: card.dataset.itemName || "",
+  info: card.querySelector(".info")?.value || "",
+  lyrics: card.querySelector(".lyrics")?.value || "",
+  notes: card.querySelector(".notes")?.value || "",
+  audioDataUrl: card.querySelector(".audio-player")?.src || "",
+});
+
+const getItemsFromDom = () => {
+  return [...itemList.querySelectorAll(".item-card")].map(getItemDataFromCard);
+};
+
+const persistDomOrder = () => {
+  saveItems(getItemsFromDom());
+};
+
 const createItemNode = (itemData = {}) => {
   const clone = itemTemplate.content.cloneNode(true);
   const card = clone.querySelector(".item-card");
   const toggle = clone.querySelector(".item-toggle");
-  const titleInput = clone.querySelector(".item-title-input");
+  const title = clone.querySelector(".item-title");
   const details = clone.querySelector(".item-details");
-  const fileInput = clone.querySelector(".audio-upload");
   const audioPlayer = clone.querySelector(".audio-player");
+  const infoInput = clone.querySelector(".info");
   const lyricsInput = clone.querySelector(".lyrics");
   const notesInput = clone.querySelector(".notes");
-  const saveBtn = clone.querySelector(".save-btn");
-  const removeBtn = clone.querySelector(".remove-btn");
 
   const updateTitle = () => {
-    if (titleInput.value.trim()) {
-      titleInput.value = titleInput.value.trim();
-    }
-    titleInput.placeholder = titleInput.value.trim() ? titleInput.value.trim() : "새 항목";
-  };
-
-  const loadAudio = (file) => {
-    if (!file) {
-      audioPlayer.src = "";
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      audioPlayer.src = reader.result;
-    };
-    reader.readAsDataURL(file);
+    title.textContent = card.dataset.itemName || "새 항목";
   };
 
   const persistCurrentItem = () => {
-    const items = loadItems();
-    const updated = items.filter((item) => item.id !== card.dataset.itemId);
-    updated.unshift(getCurrentItem());
-    saveItems(updated);
+    persistDomOrder();
   };
 
   const autoResizeTextArea = (textarea) => {
@@ -66,79 +67,85 @@ const createItemNode = (itemData = {}) => {
 
   const getCurrentItem = () => ({
     id: card.dataset.itemId,
-    name: titleInput.value,
+    name: card.dataset.itemName || "",
+    info: infoInput.value,
     lyrics: lyricsInput.value,
     notes: notesInput.value,
     audioDataUrl: audioPlayer.src || "",
   });
 
   card.dataset.itemId = itemData.id || `item-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  titleInput.value = itemData.name || "";
+  card.dataset.itemName = itemData.name || "";
+  infoInput.value = itemData.info ?? DEFAULT_INFO_TEXT;
   lyricsInput.value = itemData.lyrics || "";
   notesInput.value = itemData.notes || "";
   updateTitle();
+  autoResizeTextArea(infoInput);
   autoResizeTextArea(lyricsInput);
   autoResizeTextArea(notesInput);
   if (itemData.audioDataUrl) {
     audioPlayer.src = itemData.audioDataUrl;
   }
 
+  card.addEventListener("dragstart", (event) => {
+    if (event.target.closest("button, input, textarea, audio, label")) {
+      event.preventDefault();
+      return;
+    }
+
+    card.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", card.dataset.itemId);
+  });
+
+  card.addEventListener("dragend", () => {
+    card.classList.remove("dragging");
+    persistDomOrder();
+  });
+
   toggle.addEventListener("click", () => {
     card.classList.toggle("open");
     if (card.classList.contains("open")) {
       requestAnimationFrame(() => {
         autoResizeTextArea(lyricsInput);
+        autoResizeTextArea(infoInput);
         autoResizeTextArea(notesInput);
       });
     }
   });
 
-  titleInput.addEventListener("input", updateTitle);
-  titleInput.addEventListener("input", persistCurrentItem);
-  titleInput.addEventListener("click", (event) => {
-    event.stopPropagation();
-  });
-
-  lyricsInput.addEventListener("input", () => autoResizeTextArea(lyricsInput));
-  lyricsInput.addEventListener("input", persistCurrentItem);
   notesInput.addEventListener("input", () => autoResizeTextArea(notesInput));
   notesInput.addEventListener("input", persistCurrentItem);
-
-  fileInput.addEventListener("change", (event) => {
-    const file = event.target.files[0];
-    loadAudio(file);
-    persistCurrentItem();
-  });
-
-  saveBtn.addEventListener("click", () => {
-    const items = loadItems();
-    const updated = items.filter((item) => item.id !== card.dataset.itemId);
-    updated.unshift(getCurrentItem());
-    saveItems(updated);
-    alert("항목이 저장되었습니다.");
-  });
-
-  removeBtn.addEventListener("click", () => {
-    const items = loadItems().filter((item) => item.id !== card.dataset.itemId);
-    saveItems(items);
-    card.remove();
-  });
-
-  persistCurrentItem();
 
   return clone;
 };
 
-const setTheme = (theme) => {
-  document.documentElement.dataset.theme = theme;
-  themeToggleBtn.textContent = theme === "dark" ? "☀️" : "🌙";
-  localStorage.setItem(THEME_KEY, theme);
+const getDragAfterElement = (container, y) => {
+  const cards = [...container.querySelectorAll(".item-card:not(.dragging)")];
+
+  return cards.reduce(
+    (closest, card) => {
+      const box = card.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+
+      if (offset < 0 && offset > closest.offset) {
+        return { offset, element: card };
+      }
+
+      return closest;
+    },
+    { offset: Number.NEGATIVE_INFINITY, element: null },
+  ).element;
 };
 
 const loadTheme = () => {
-  const savedTheme = localStorage.getItem(THEME_KEY);
-  const preferred = savedTheme || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-  setTheme(preferred);
+  const themeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  const syncTheme = () => {
+    document.documentElement.dataset.theme = themeQuery.matches ? "dark" : "light";
+  };
+
+  syncTheme();
+  themeQuery.addEventListener("change", syncTheme);
 };
 
 const renderItems = () => {
@@ -155,22 +162,27 @@ const renderItems = () => {
   });
 };
 
-addItemBtn.addEventListener("click", () => {
-  const node = createItemNode({});
-  itemList.prepend(node);
-  const card = itemList.querySelector(".item-card");
-  if (card) {
-    card.classList.add("open");
+itemList.addEventListener("dragover", (event) => {
+  const draggingCard = itemList.querySelector(".item-card.dragging");
+  if (!draggingCard) return;
+
+  event.preventDefault();
+  const afterElement = getDragAfterElement(itemList, event.clientY);
+  if (afterElement) {
+    itemList.insertBefore(draggingCard, afterElement);
+  } else {
+    itemList.appendChild(draggingCard);
   }
 });
 
-themeToggleBtn.addEventListener("click", () => {
-  const current = document.documentElement.dataset.theme;
-  setTheme(current === "dark" ? "light" : "dark");
+itemList.addEventListener("drop", (event) => {
+  event.preventDefault();
+  persistDomOrder();
 });
 
 // --- GitHub 저장 관련 UI 핸들러 ---
 const githubSaveBtn = document.getElementById("githubSaveBtn");
+const resetLocalBtn = document.getElementById("resetLocalBtn");
 const githubModal = document.getElementById("githubModal");
 const ghSaveBtn = document.getElementById("ghSaveBtn");
 const ghCloseBtn = document.getElementById("ghCloseBtn");
@@ -184,9 +196,37 @@ const ghPath = document.getElementById("ghPath");
 const ghMessage = document.getElementById("ghMessage");
 const ghToken = document.getElementById("ghToken");
 
+const exportItemsJson = () => {
+  const items = loadItems();
+  const data = JSON.stringify(items, null, 2);
+  const blob = new Blob([data], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "items.json";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 if (githubSaveBtn) {
   githubSaveBtn.addEventListener("click", () => {
-    githubModal && githubModal.setAttribute("aria-hidden", "false");
+    const shouldExport = confirm("현재 항목을 JSON 파일로 내보낼까요?");
+    if (shouldExport) {
+      exportItemsJson();
+    }
+  });
+}
+
+if (resetLocalBtn) {
+  resetLocalBtn.addEventListener("click", async () => {
+    const shouldReset = confirm("로컬에 저장된 수정사항을 지우고 JSON 파일에서 다시 불러올까요?");
+    if (!shouldReset) return;
+
+    resetLocalBtn.disabled = true;
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem("audioItemTheme");
+    await loadInitialData();
+    resetLocalBtn.disabled = false;
   });
 }
 
@@ -198,15 +238,7 @@ if (ghCloseBtn) {
 
 if (exportBtn) {
   exportBtn.addEventListener("click", () => {
-    const items = loadItems();
-    const data = JSON.stringify(items, null, 2);
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "items.json";
-    a.click();
-    URL.revokeObjectURL(url);
+    exportItemsJson();
   });
 }
 
@@ -294,7 +326,7 @@ async function loadInitialData() {
     if (resp.ok) {
       const data = await resp.json();
       if (Array.isArray(data)) {
-        saveItems(data);
+        saveItems(data.map(normalizeItem));
         renderItems();
         return;
       }
