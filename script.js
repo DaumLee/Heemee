@@ -26,6 +26,7 @@ let metronomeState = {
   activeButton: null,
   activeCard: null,
   beat: 0,
+  nextClickTime: 0,
 };
 let touchDragState = null;
 
@@ -87,6 +88,7 @@ const stopMetronome = () => {
     activeButton: null,
     activeCard: null,
     beat: 0,
+    nextClickTime: 0,
   };
 };
 
@@ -112,9 +114,9 @@ const getClickKind = (timeSignature) => {
 };
 
 const getClickFrequency = (kind) => {
-  if (kind === "primary") return 1200;
-  if (kind === "secondary") return 1000;
-  return 760;
+  if (kind === "primary") return 1500;
+  if (kind === "secondary") return 1250;
+  return 1000;
 };
 
 const bytesToBase64 = (bytes) => {
@@ -135,9 +137,22 @@ const writeAscii = (view, offset, text) => {
   }
 };
 
-const createClickWavDataUrl = (frequency, volume) => {
-  const sampleRate = 44100;
-  const duration = 0.065;
+const getClickEnvelope = (time, peakGain) => {
+  if (time < 0.002) {
+    return peakGain * (time / 0.002);
+  }
+
+  if (time <= 0.05) {
+    const progress = (time - 0.002) / 0.048;
+    return peakGain * Math.pow(0.001 / peakGain, progress);
+  }
+
+  return 0.001;
+};
+
+const createClickWavDataUrl = (frequency, peakGain) => {
+  const sampleRate = 48000;
+  const duration = 0.06;
   const sampleCount = Math.floor(sampleRate * duration);
   const headerSize = 44;
   const bytesPerSample = 2;
@@ -159,12 +174,11 @@ const createClickWavDataUrl = (frequency, volume) => {
   view.setUint32(40, sampleCount * bytesPerSample, true);
 
   for (let sample = 0; sample < sampleCount; sample += 1) {
-    const progress = sample / sampleCount;
-    const attack = Math.min(1, progress / 0.08);
-    const decay = Math.max(0, 1 - progress);
-    const envelope = attack * decay * decay;
-    const wave = Math.sin((2 * Math.PI * frequency * sample) / sampleRate);
-    const value = Math.max(-1, Math.min(1, wave * envelope * volume));
+    const time = sample / sampleRate;
+    const phase = (2 * Math.PI * frequency * sample) / sampleRate;
+    const envelope = getClickEnvelope(time, peakGain);
+    const wave = Math.sin(phase) >= 0 ? 1 : -1;
+    const value = Math.max(-1, Math.min(1, wave * envelope));
     view.setInt16(headerSize + sample * bytesPerSample, value * 0x7fff, true);
   }
 
@@ -184,9 +198,9 @@ const ensureMetronomeMedia = () => {
   if (metronomeState.audioPools) return;
 
   metronomeState.audioPools = {
-    primary: createAudioPool(createClickWavDataUrl(getClickFrequency("primary"), 0.75)),
-    secondary: createAudioPool(createClickWavDataUrl(getClickFrequency("secondary"), 0.62)),
-    regular: createAudioPool(createClickWavDataUrl(getClickFrequency("regular"), 0.5)),
+    primary: createAudioPool(createClickWavDataUrl(getClickFrequency("primary"), 0.4)),
+    secondary: createAudioPool(createClickWavDataUrl(getClickFrequency("secondary"), 0.4)),
+    regular: createAudioPool(createClickWavDataUrl(getClickFrequency("regular"), 0.4)),
   };
 };
 
@@ -224,19 +238,19 @@ const unlockMetronomeAudio = async () => {
   return context;
 };
 
-const playWebAudioClick = (kind) => {
+const playWebAudioClick = (kind, scheduledTime) => {
   const context = metronomeState.audioContext;
   if (!context || context.state === "suspended") return;
 
-  const now = context.currentTime;
+  const now = scheduledTime ?? context.currentTime;
   const oscillator = context.createOscillator();
   const gain = context.createGain();
 
   oscillator.type = "square";
   oscillator.frequency.setValueAtTime(getClickFrequency(kind), now);
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(kind === "primary" ? 0.28 : kind === "secondary" ? 0.22 : 0.15, now + 0.004);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
+  gain.gain.setValueAtTime(0, now);
+  gain.gain.linearRampToValueAtTime(0.4, now + 0.002);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
 
   oscillator.connect(gain);
   gain.connect(context.destination);
@@ -248,10 +262,41 @@ const playWebAudioClick = (kind) => {
   };
 };
 
-const playMetronomeClick = ({ timeSignature }) => {
+const playMetronomeClick = ({ timeSignature }, scheduledTime) => {
   const kind = getClickKind(timeSignature);
-  playMediaClick(kind);
+  if (scheduledTime !== undefined && metronomeState.audioContext?.state === "running") {
+    playWebAudioClick(kind, scheduledTime);
+  } else {
+    playMediaClick(kind);
+  }
   metronomeState.beat += 1;
+};
+
+const startWebAudioMetronome = (config) => {
+  const context = metronomeState.audioContext;
+  if (!context || context.state !== "running") return false;
+
+  const secondsPerBeat = 60 / config.bpm;
+  const scheduleAheadTime = 0.1;
+  metronomeState.nextClickTime = context.currentTime + 0.012;
+
+  const scheduleClicks = () => {
+    while (metronomeState.nextClickTime < context.currentTime + scheduleAheadTime) {
+      playMetronomeClick(config, metronomeState.nextClickTime);
+      metronomeState.nextClickTime += secondsPerBeat;
+    }
+  };
+
+  scheduleClicks();
+  metronomeState.timerId = window.setInterval(scheduleClicks, 25);
+  return true;
+};
+
+const startMediaMetronome = (config) => {
+  playMetronomeClick(config);
+  metronomeState.timerId = window.setInterval(() => {
+    playMetronomeClick(config);
+  }, 60000 / config.bpm);
 };
 
 const startMetronome = async (card, button, config) => {
@@ -262,13 +307,15 @@ const startMetronome = async (card, button, config) => {
   metronomeState.beat = 0;
   setMetronomeButtonState(button, true);
 
-  playMetronomeClick(config);
-  unlockMetronomeAudio().catch((error) => {
-    console.error("Metronome fallback audio could not be started.", error);
-  });
-  metronomeState.timerId = window.setInterval(() => {
-    playMetronomeClick(config);
-  }, 60000 / config.bpm);
+  try {
+    await unlockMetronomeAudio();
+  } catch (error) {
+    console.error("Metronome WebAudio could not be started.", error);
+  }
+
+  if (!startWebAudioMetronome(config)) {
+    startMediaMetronome(config);
+  }
 };
 
 const loadItems = () => {
