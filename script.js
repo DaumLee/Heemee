@@ -12,6 +12,12 @@ const TIME_SIGNATURE_PATTERNS = [
 const DEFAULT_TIME_SIGNATURE = { label: "4/4", beatsPerMeasure: 4, accents: [0] };
 let metronomeState = {
   audioContext: null,
+  audioPools: null,
+  audioPoolIndexes: {
+    primary: 0,
+    secondary: 0,
+    regular: 0,
+  },
   timerId: null,
   activeButton: null,
   activeCard: null,
@@ -62,6 +68,13 @@ const stopMetronome = () => {
     clearInterval(metronomeState.timerId);
   }
 
+  Object.values(metronomeState.audioPools || {}).forEach((pool) => {
+    pool.forEach((audio) => {
+      audio.pause();
+      audio.currentTime = 0;
+    });
+  });
+
   setMetronomeButtonState(metronomeState.activeButton, false);
   metronomeState = {
     ...metronomeState,
@@ -83,6 +96,118 @@ const getMetronomeAudioContext = () => {
   return metronomeState.audioContext;
 };
 
+const getClickKind = (timeSignature) => {
+  const beatInMeasure = metronomeState.beat % timeSignature.beatsPerMeasure;
+  const isPrimaryAccent = beatInMeasure === 0;
+  const isSecondaryAccent = !isPrimaryAccent && timeSignature.accents.includes(beatInMeasure);
+
+  if (isPrimaryAccent) return "primary";
+  if (isSecondaryAccent) return "secondary";
+  return "regular";
+};
+
+const getClickFrequency = (kind) => {
+  if (kind === "primary") return 1200;
+  if (kind === "secondary") return 1000;
+  return 760;
+};
+
+const bytesToBase64 = (bytes) => {
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return btoa(binary);
+};
+
+const writeAscii = (view, offset, text) => {
+  for (let index = 0; index < text.length; index += 1) {
+    view.setUint8(offset + index, text.charCodeAt(index));
+  }
+};
+
+const createClickWavDataUrl = (frequency, volume) => {
+  const sampleRate = 44100;
+  const duration = 0.065;
+  const sampleCount = Math.floor(sampleRate * duration);
+  const headerSize = 44;
+  const bytesPerSample = 2;
+  const buffer = new ArrayBuffer(headerSize + sampleCount * bytesPerSample);
+  const view = new DataView(buffer);
+
+  writeAscii(view, 0, "RIFF");
+  view.setUint32(4, 36 + sampleCount * bytesPerSample, true);
+  writeAscii(view, 8, "WAVE");
+  writeAscii(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * bytesPerSample, true);
+  view.setUint16(32, bytesPerSample, true);
+  view.setUint16(34, 8 * bytesPerSample, true);
+  writeAscii(view, 36, "data");
+  view.setUint32(40, sampleCount * bytesPerSample, true);
+
+  for (let sample = 0; sample < sampleCount; sample += 1) {
+    const progress = sample / sampleCount;
+    const attack = Math.min(1, progress / 0.08);
+    const decay = Math.max(0, 1 - progress);
+    const envelope = attack * decay * decay;
+    const wave = Math.sin((2 * Math.PI * frequency * sample) / sampleRate);
+    const value = Math.max(-1, Math.min(1, wave * envelope * volume));
+    view.setInt16(headerSize + sample * bytesPerSample, value * 0x7fff, true);
+  }
+
+  return `data:audio/wav;base64,${bytesToBase64(new Uint8Array(buffer))}`;
+};
+
+const createAudioPool = (src) => {
+  return Array.from({ length: 4 }, () => {
+    const audio = new Audio(src);
+    audio.preload = "auto";
+    audio.playsInline = true;
+    return audio;
+  });
+};
+
+const ensureMetronomeMedia = () => {
+  if (metronomeState.audioPools) return;
+
+  metronomeState.audioPools = {
+    primary: createAudioPool(createClickWavDataUrl(getClickFrequency("primary"), 0.75)),
+    secondary: createAudioPool(createClickWavDataUrl(getClickFrequency("secondary"), 0.62)),
+    regular: createAudioPool(createClickWavDataUrl(getClickFrequency("regular"), 0.5)),
+  };
+};
+
+const playMediaClick = (kind) => {
+  ensureMetronomeMedia();
+
+  const pool = metronomeState.audioPools?.[kind];
+  if (!pool) return false;
+
+  const index = metronomeState.audioPoolIndexes[kind] % pool.length;
+  const audio = pool[index];
+  metronomeState.audioPoolIndexes[kind] = index + 1;
+
+  audio.pause();
+  audio.currentTime = 0;
+
+  const playPromise = audio.play();
+  if (playPromise?.catch) {
+    playPromise.catch(() => {
+      playWebAudioClick(kind);
+    });
+  }
+
+  return true;
+};
+
 const unlockMetronomeAudio = async () => {
   const context = getMetronomeAudioContext();
   if (!context) return null;
@@ -94,21 +219,18 @@ const unlockMetronomeAudio = async () => {
   return context;
 };
 
-const playMetronomeClick = ({ timeSignature }) => {
+const playWebAudioClick = (kind) => {
   const context = metronomeState.audioContext;
   if (!context || context.state === "suspended") return;
 
   const now = context.currentTime;
   const oscillator = context.createOscillator();
   const gain = context.createGain();
-  const beatInMeasure = metronomeState.beat % timeSignature.beatsPerMeasure;
-  const isPrimaryAccent = beatInMeasure === 0;
-  const isSecondaryAccent = !isPrimaryAccent && timeSignature.accents.includes(beatInMeasure);
 
   oscillator.type = "square";
-  oscillator.frequency.setValueAtTime(isPrimaryAccent ? 1200 : isSecondaryAccent ? 1000 : 760, now);
+  oscillator.frequency.setValueAtTime(getClickFrequency(kind), now);
   gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(isPrimaryAccent ? 0.28 : isSecondaryAccent ? 0.22 : 0.15, now + 0.004);
+  gain.gain.exponentialRampToValueAtTime(kind === "primary" ? 0.28 : kind === "secondary" ? 0.22 : 0.15, now + 0.004);
   gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
 
   oscillator.connect(gain);
@@ -119,19 +241,16 @@ const playMetronomeClick = ({ timeSignature }) => {
     oscillator.disconnect();
     gain.disconnect();
   };
+};
+
+const playMetronomeClick = ({ timeSignature }) => {
+  const kind = getClickKind(timeSignature);
+  playMediaClick(kind);
   metronomeState.beat += 1;
 };
 
 const startMetronome = async (card, button, config) => {
   stopMetronome();
-
-  try {
-    const context = await unlockMetronomeAudio();
-    if (!context) return;
-  } catch (error) {
-    console.error("Metronome audio could not be started.", error);
-    return;
-  }
 
   metronomeState.activeButton = button;
   metronomeState.activeCard = card;
@@ -139,6 +258,9 @@ const startMetronome = async (card, button, config) => {
   setMetronomeButtonState(button, true);
 
   playMetronomeClick(config);
+  unlockMetronomeAudio().catch((error) => {
+    console.error("Metronome fallback audio could not be started.", error);
+  });
   metronomeState.timerId = window.setInterval(() => {
     playMetronomeClick(config);
   }, 60000 / config.bpm);
