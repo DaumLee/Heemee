@@ -82,6 +82,10 @@ button {
   transition: background 0.2s ease, color 0.2s ease;
 }
 
+.legacy-hidden {
+  display: none !important;
+}
+
 #addItemBtn {
   display: inline-flex;
   align-items: center;

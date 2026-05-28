@@ -170,23 +170,25 @@ const renderItems = () => {
   });
 };
 
-itemList.addEventListener("dragover", (event) => {
-  const draggingCard = itemList.querySelector(".item-card.dragging");
-  if (!draggingCard) return;
+if (itemList) {
+  itemList.addEventListener("dragover", (event) => {
+    const draggingCard = itemList.querySelector(".item-card.dragging");
+    if (!draggingCard) return;
 
-  event.preventDefault();
-  const afterElement = getDragAfterElement(itemList, event.clientY);
-  if (afterElement) {
-    itemList.insertBefore(draggingCard, afterElement);
-  } else {
-    itemList.appendChild(draggingCard);
-  }
-});
+    event.preventDefault();
+    const afterElement = getDragAfterElement(itemList, event.clientY);
+    if (afterElement) {
+      itemList.insertBefore(draggingCard, afterElement);
+    } else {
+      itemList.appendChild(draggingCard);
+    }
+  });
 
-itemList.addEventListener("drop", (event) => {
-  event.preventDefault();
-  persistDomOrder();
-});
+  itemList.addEventListener("drop", (event) => {
+    event.preventDefault();
+    persistDomOrder();
+  });
+}
 
 // --- GitHub 저장 관련 UI 핸들러 ---
 const githubSaveBtn = document.getElementById("githubSaveBtn");
@@ -326,6 +328,11 @@ if (ghSaveBtn) {
 
 // Load theme, then ensure initial items are available (from localStorage or external file)
 async function loadInitialData() {
+  if (!itemList || !itemTemplate) {
+    console.error("Required item list elements are missing.");
+    return;
+  }
+
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved && saved.length) {
     renderItems();
