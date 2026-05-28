@@ -72,15 +72,32 @@ const stopMetronome = () => {
   };
 };
 
-const playMetronomeClick = ({ timeSignature }) => {
+const getMetronomeAudioContext = () => {
   const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return;
+  if (!AudioContextClass) return null;
 
   if (!metronomeState.audioContext) {
     metronomeState.audioContext = new AudioContextClass();
   }
 
+  return metronomeState.audioContext;
+};
+
+const unlockMetronomeAudio = async () => {
+  const context = getMetronomeAudioContext();
+  if (!context) return null;
+
+  if (context.state === "suspended") {
+    await context.resume();
+  }
+
+  return context;
+};
+
+const playMetronomeClick = ({ timeSignature }) => {
   const context = metronomeState.audioContext;
+  if (!context || context.state === "suspended") return;
+
   const now = context.currentTime;
   const oscillator = context.createOscillator();
   const gain = context.createGain();
@@ -98,14 +115,22 @@ const playMetronomeClick = ({ timeSignature }) => {
   gain.connect(context.destination);
   oscillator.start(now);
   oscillator.stop(now + 0.06);
+  oscillator.onended = () => {
+    oscillator.disconnect();
+    gain.disconnect();
+  };
   metronomeState.beat += 1;
 };
 
 const startMetronome = async (card, button, config) => {
   stopMetronome();
 
-  if (metronomeState.audioContext?.state === "suspended") {
-    await metronomeState.audioContext.resume();
+  try {
+    const context = await unlockMetronomeAudio();
+    if (!context) return;
+  } catch (error) {
+    console.error("Metronome audio could not be started.", error);
+    return;
   }
 
   metronomeState.activeButton = button;

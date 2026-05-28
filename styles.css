@@ -113,8 +113,8 @@ button {
   margin-top: 20px;
 }
 
-/* GitHub save button */
-.github-btn {
+/* Json export button */
+.json-btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -126,8 +126,8 @@ button {
   font-weight: 600;
 }
 
-.github-btn svg { display: block; }
-.github-btn:hover { filter: brightness(1.08); }
+.json-btn svg { display: block; }
+.json-btn:hover { filter: brightness(1.08); }
 
 .reset-local-btn {
   padding: 10px 14px;
