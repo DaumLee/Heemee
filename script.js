@@ -6,6 +6,8 @@ const TOUCH_DRAG_DELAY = 420;
 const TOUCH_MOVE_CANCEL_DISTANCE = 9;
 const TOUCH_SCROLL_EDGE_SIZE = 82;
 const TOUCH_SCROLL_STEP = 14;
+const CLICK_PEAK_GAIN = 0.3;
+const IOS_AUDIO_UNLOCK_EVENTS = ["click", "touchend", "keydown", "mousedown", "mouseup"];
 const DEFAULT_INFO_TEXT = "BPM: \nKey: \n구성: \n메모: ";
 const BPM_PATTERN = /\bbpm\s*[:=]?\s*(\d{2,3}(?:\.\d+)?)/i;
 const TIME_SIGNATURE_PATTERNS = [
@@ -29,6 +31,14 @@ let metronomeState = {
   nextClickTime: 0,
 };
 let touchDragState = null;
+let iosAudioUnlockState = {
+  initialized: false,
+  htmlAudio: null,
+  htmlAudioPromise: null,
+  webAudioPromise: null,
+  htmlAudioState: "blocked",
+  webAudioState: "blocked",
+};
 
 const normalizeItem = (item) => ({
   ...item,
@@ -137,6 +147,136 @@ const writeAscii = (view, offset, text) => {
   }
 };
 
+const isIosWebAudio = () => {
+  return navigator.maxTouchPoints > 0 && Boolean(window.webkitAudioContext);
+};
+
+const createSilentWavDataUrl = (sampleRate) => {
+  const sampleCount = 8;
+  const headerSize = 44;
+  const buffer = new ArrayBuffer(headerSize + sampleCount);
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+
+  writeAscii(view, 0, "RIFF");
+  view.setUint32(4, 36 + sampleCount, true);
+  writeAscii(view, 8, "WAVE");
+  writeAscii(view, 12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  writeAscii(view, 36, "data");
+  view.setUint32(40, sampleCount, true);
+
+  for (let index = headerSize; index < bytes.length; index += 1) {
+    bytes[index] = 128;
+  }
+
+  return `data:audio/wav;base64,${bytesToBase64(bytes)}`;
+};
+
+const cleanupIosAudioUnlockListeners = () => {
+  if (iosAudioUnlockState.htmlAudioState !== "allowed" || iosAudioUnlockState.webAudioState !== "allowed") return;
+
+  IOS_AUDIO_UNLOCK_EVENTS.forEach((eventName) => {
+    window.removeEventListener(eventName, unlockIosAudio, { capture: true });
+  });
+};
+
+const unlockIosHtmlAudio = () => {
+  if (iosAudioUnlockState.htmlAudioState === "allowed") return Promise.resolve();
+  if (iosAudioUnlockState.htmlAudioPromise) return iosAudioUnlockState.htmlAudioPromise;
+
+  iosAudioUnlockState.htmlAudioState = "pending";
+  const sampleRate = metronomeState.audioContext?.sampleRate || 44100;
+  const audio = document.createElement("audio");
+  audio.setAttribute("x-webkit-airplay", "deny");
+  audio.preload = "auto";
+  audio.loop = true;
+  audio.src = createSilentWavDataUrl(sampleRate);
+  audio.load();
+  iosAudioUnlockState.htmlAudio = audio;
+
+  const playPromise = audio.play();
+  if (playPromise?.then) {
+    iosAudioUnlockState.htmlAudioPromise = playPromise
+      .then(() => {
+        iosAudioUnlockState.htmlAudioState = "allowed";
+        cleanupIosAudioUnlockListeners();
+      })
+      .catch(() => {
+        iosAudioUnlockState.htmlAudioState = "blocked";
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.load();
+        iosAudioUnlockState.htmlAudio = null;
+        iosAudioUnlockState.htmlAudioPromise = null;
+      });
+  }
+
+  return iosAudioUnlockState.htmlAudioPromise || Promise.resolve();
+};
+
+const unlockIosWebAudio = () => {
+  if (iosAudioUnlockState.webAudioState === "allowed") return Promise.resolve();
+  if (iosAudioUnlockState.webAudioPromise) return iosAudioUnlockState.webAudioPromise;
+
+  iosAudioUnlockState.webAudioState = "pending";
+  const context = getMetronomeAudioContext();
+  if (!context) {
+    iosAudioUnlockState.webAudioState = "blocked";
+    return Promise.resolve();
+  }
+
+  const markAllowed = () => {
+    if (context.state !== "running") {
+      iosAudioUnlockState.webAudioState = "blocked";
+      return;
+    }
+
+    const source = context.createBufferSource();
+    source.buffer = context.createBuffer(1, 1, 22050);
+    source.connect(context.destination);
+    source.start(context.currentTime);
+    source.onended = () => source.disconnect();
+    iosAudioUnlockState.webAudioState = "allowed";
+    cleanupIosAudioUnlockListeners();
+  };
+
+  if (context.state === "suspended") {
+    iosAudioUnlockState.webAudioPromise = context
+      .resume()
+      .then(markAllowed)
+      .catch(() => {
+        iosAudioUnlockState.webAudioState = "blocked";
+        iosAudioUnlockState.webAudioPromise = null;
+      });
+  } else if (context.state === "running") {
+    markAllowed();
+  } else {
+    iosAudioUnlockState.webAudioState = "blocked";
+  }
+
+  return iosAudioUnlockState.webAudioPromise || Promise.resolve();
+};
+
+function unlockIosAudio() {
+  return Promise.allSettled([unlockIosHtmlAudio(), unlockIosWebAudio()]);
+}
+
+const initIosAudioUnlock = () => {
+  if (iosAudioUnlockState.initialized || !isIosWebAudio()) return;
+
+  iosAudioUnlockState.initialized = true;
+  IOS_AUDIO_UNLOCK_EVENTS.forEach((eventName) => {
+    window.addEventListener(eventName, unlockIosAudio, { capture: true, passive: true });
+  });
+};
+
 const getClickEnvelope = (time, peakGain) => {
   if (time < 0.002) {
     return peakGain * (time / 0.002);
@@ -198,9 +338,9 @@ const ensureMetronomeMedia = () => {
   if (metronomeState.audioPools) return;
 
   metronomeState.audioPools = {
-    primary: createAudioPool(createClickWavDataUrl(getClickFrequency("primary"), 0.4)),
-    secondary: createAudioPool(createClickWavDataUrl(getClickFrequency("secondary"), 0.4)),
-    regular: createAudioPool(createClickWavDataUrl(getClickFrequency("regular"), 0.4)),
+    primary: createAudioPool(createClickWavDataUrl(getClickFrequency("primary"), CLICK_PEAK_GAIN)),
+    secondary: createAudioPool(createClickWavDataUrl(getClickFrequency("secondary"), CLICK_PEAK_GAIN)),
+    regular: createAudioPool(createClickWavDataUrl(getClickFrequency("regular"), CLICK_PEAK_GAIN)),
   };
 };
 
@@ -249,7 +389,7 @@ const playWebAudioClick = (kind, scheduledTime) => {
   oscillator.type = "square";
   oscillator.frequency.setValueAtTime(getClickFrequency(kind), now);
   gain.gain.setValueAtTime(0, now);
-  gain.gain.linearRampToValueAtTime(0.4, now + 0.002);
+  gain.gain.linearRampToValueAtTime(CLICK_PEAK_GAIN, now + 0.002);
   gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
 
   oscillator.connect(gain);
@@ -306,6 +446,14 @@ const startMetronome = async (card, button, config) => {
   metronomeState.activeCard = card;
   metronomeState.beat = 0;
   setMetronomeButtonState(button, true);
+
+  if (isIosWebAudio()) {
+    startMediaMetronome(config);
+    unlockIosAudio().catch((error) => {
+      console.error("Metronome iOS audio unlock could not be completed.", error);
+    });
+    return;
+  }
 
   try {
     await unlockMetronomeAudio();
@@ -756,6 +904,7 @@ async function loadInitialData() {
 }
 
 try {
+  initIosAudioUnlock();
   loadTheme();
 } catch (error) {
   console.warn("Could not sync theme:", error);
