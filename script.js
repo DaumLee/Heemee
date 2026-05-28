@@ -3,6 +3,20 @@ const itemTemplate = document.getElementById("itemTemplate");
 const scrollTopBtn = document.getElementById("scrollTopBtn");
 const STORAGE_KEY = "audioItemStorage";
 const DEFAULT_INFO_TEXT = "BPM: \nKey: \n구성: \n메모: ";
+const BPM_PATTERN = /\bbpm\s*[:=]?\s*(\d{2,3}(?:\.\d+)?)/i;
+const TIME_SIGNATURE_PATTERNS = [
+  { pattern: /\b6\s*\/\s*8\b|six[-\s]?eight/i, value: { label: "6/8", beatsPerMeasure: 6, accents: [0, 3] } },
+  { pattern: /\b3\s*\/\s*4\b|three[-\s]?four/i, value: { label: "3/4", beatsPerMeasure: 3, accents: [0] } },
+  { pattern: /\b4\s*\/\s*4\b|four[-\s]?four/i, value: { label: "4/4", beatsPerMeasure: 4, accents: [0] } },
+];
+const DEFAULT_TIME_SIGNATURE = { label: "4/4", beatsPerMeasure: 4, accents: [0] };
+let metronomeState = {
+  audioContext: null,
+  timerId: null,
+  activeButton: null,
+  activeCard: null,
+  beat: 0,
+};
 
 const normalizeItem = (item) => ({
   ...item,
@@ -11,6 +25,98 @@ const normalizeItem = (item) => ({
 
 const parseJsonText = (text) => {
   return JSON.parse(text.replace(/^\uFEFF/, ""));
+};
+
+const parseBpm = (text = "") => {
+  const match = text.match(BPM_PATTERN);
+  if (!match) return null;
+
+  const bpm = Number(match[1]);
+  if (!Number.isFinite(bpm) || bpm < 20 || bpm > 300) return null;
+  return bpm;
+};
+
+const parseTimeSignature = (text = "") => {
+  const found = TIME_SIGNATURE_PATTERNS.find(({ pattern }) => pattern.test(text));
+  return found ? found.value : DEFAULT_TIME_SIGNATURE;
+};
+
+const getMetronomeConfig = (text = "") => {
+  const bpm = parseBpm(text);
+  if (!bpm) return null;
+
+  return {
+    bpm,
+    timeSignature: parseTimeSignature(text),
+  };
+};
+
+const setMetronomeButtonState = (button, isPlaying) => {
+  if (!button) return;
+  button.textContent = isPlaying ? "Stop" : "Play";
+  button.setAttribute("aria-pressed", String(isPlaying));
+};
+
+const stopMetronome = () => {
+  if (metronomeState.timerId) {
+    clearInterval(metronomeState.timerId);
+  }
+
+  setMetronomeButtonState(metronomeState.activeButton, false);
+  metronomeState = {
+    ...metronomeState,
+    timerId: null,
+    activeButton: null,
+    activeCard: null,
+    beat: 0,
+  };
+};
+
+const playMetronomeClick = ({ timeSignature }) => {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+
+  if (!metronomeState.audioContext) {
+    metronomeState.audioContext = new AudioContextClass();
+  }
+
+  const context = metronomeState.audioContext;
+  const now = context.currentTime;
+  const oscillator = context.createOscillator();
+  const gain = context.createGain();
+  const beatInMeasure = metronomeState.beat % timeSignature.beatsPerMeasure;
+  const isPrimaryAccent = beatInMeasure === 0;
+  const isSecondaryAccent = !isPrimaryAccent && timeSignature.accents.includes(beatInMeasure);
+
+  oscillator.type = "square";
+  oscillator.frequency.setValueAtTime(isPrimaryAccent ? 1200 : isSecondaryAccent ? 1000 : 760, now);
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(isPrimaryAccent ? 0.28 : isSecondaryAccent ? 0.22 : 0.15, now + 0.004);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
+
+  oscillator.connect(gain);
+  gain.connect(context.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.06);
+  metronomeState.beat += 1;
+};
+
+const startMetronome = async (card, button, config) => {
+  stopMetronome();
+
+  if (metronomeState.audioContext?.state === "suspended") {
+    await metronomeState.audioContext.resume();
+  }
+
+  metronomeState.activeButton = button;
+  metronomeState.activeCard = card;
+  metronomeState.beat = 0;
+  setMetronomeButtonState(button, true);
+
+  playMetronomeClick(config);
+  metronomeState.timerId = window.setInterval(() => {
+    playMetronomeClick(config);
+  }, 60000 / config.bpm);
 };
 
 const loadItems = () => {
@@ -53,6 +159,8 @@ const createItemNode = (itemData = {}) => {
   const title = clone.querySelector(".item-title");
   const details = clone.querySelector(".item-details");
   const audioPlayer = clone.querySelector(".audio-player");
+  const metronomeBtn = clone.querySelector(".metronome-btn");
+  const metronomeBpm = clone.querySelector(".metronome-bpm");
   const infoInput = clone.querySelector(".info");
   const lyricsInput = clone.querySelector(".lyrics");
   const notesInput = clone.querySelector(".notes");
@@ -61,8 +169,25 @@ const createItemNode = (itemData = {}) => {
     title.textContent = card.dataset.itemName || "새 항목";
   };
 
+  const syncDragState = () => {
+    card.draggable = !card.classList.contains("open");
+  };
+
   const persistCurrentItem = () => {
     persistDomOrder();
+  };
+
+  const syncMetronomeControls = () => {
+    const config = getMetronomeConfig(infoInput.value);
+    metronomeBpm.textContent = config ? `${config.bpm} BPM · ${config.timeSignature.label}` : "No BPM";
+    metronomeBtn.disabled = !config;
+    metronomeBtn.title = config
+      ? `Play metronome at ${config.bpm} BPM in ${config.timeSignature.label}`
+      : "Add BPM info first";
+
+    if (!config && metronomeState.activeButton === metronomeBtn) {
+      stopMetronome();
+    }
   };
 
   const autoResizeTextArea = (textarea) => {
@@ -85,14 +210,19 @@ const createItemNode = (itemData = {}) => {
   lyricsInput.value = itemData.lyrics || "";
   notesInput.value = itemData.notes || "";
   updateTitle();
-  autoResizeTextArea(infoInput);
   autoResizeTextArea(lyricsInput);
   autoResizeTextArea(notesInput);
+  syncMetronomeControls();
   if (itemData.audioDataUrl) {
     audioPlayer.src = itemData.audioDataUrl;
   }
 
   card.addEventListener("dragstart", (event) => {
+    if (card.classList.contains("open")) {
+      event.preventDefault();
+      return;
+    }
+
     if (event.target.closest("button, input, textarea, audio, label")) {
       event.preventDefault();
       return;
@@ -113,13 +243,14 @@ const createItemNode = (itemData = {}) => {
     itemList.querySelectorAll(".item-card.open").forEach((openCard) => {
       if (openCard !== card) {
         openCard.classList.remove("open");
+        openCard.draggable = true;
       }
     });
     card.classList.toggle("open", shouldOpen);
+    syncDragState();
     if (card.classList.contains("open")) {
       requestAnimationFrame(() => {
         autoResizeTextArea(lyricsInput);
-        autoResizeTextArea(infoInput);
         autoResizeTextArea(notesInput);
         card.scrollIntoView({ behavior: "smooth", block: "start" });
       });
@@ -130,8 +261,21 @@ const createItemNode = (itemData = {}) => {
     }
   });
 
+  syncDragState();
   notesInput.addEventListener("input", () => autoResizeTextArea(notesInput));
   notesInput.addEventListener("input", persistCurrentItem);
+  infoInput.addEventListener("input", syncMetronomeControls);
+  metronomeBtn.addEventListener("click", async () => {
+    const config = getMetronomeConfig(infoInput.value);
+    if (!config) return;
+
+    if (metronomeState.activeButton === metronomeBtn) {
+      stopMetronome();
+      return;
+    }
+
+    await startMetronome(card, metronomeBtn, config);
+  });
 
   return clone;
 };
@@ -215,21 +359,8 @@ if (scrollTopBtn) {
   syncScrollTopButton();
 }
 
-// --- GitHub 저장 관련 UI 핸들러 ---
-const githubSaveBtn = document.getElementById("githubSaveBtn");
+const exportJsonBtn = document.getElementById("exportJsonBtn");
 const resetLocalBtn = document.getElementById("resetLocalBtn");
-const githubModal = document.getElementById("githubModal");
-const ghSaveBtn = document.getElementById("ghSaveBtn");
-const ghCloseBtn = document.getElementById("ghCloseBtn");
-const exportBtn = document.getElementById("exportBtn");
-const importBtn = document.getElementById("importBtn");
-const importFile = document.getElementById("importFile");
-const ghOwner = document.getElementById("ghOwner");
-const ghRepo = document.getElementById("ghRepo");
-const ghBranch = document.getElementById("ghBranch");
-const ghPath = document.getElementById("ghPath");
-const ghMessage = document.getElementById("ghMessage");
-const ghToken = document.getElementById("ghToken");
 
 const exportItemsJson = () => {
   const items = loadItems();
@@ -243,8 +374,8 @@ const exportItemsJson = () => {
   URL.revokeObjectURL(url);
 };
 
-if (githubSaveBtn) {
-  githubSaveBtn.addEventListener("click", () => {
+if (exportJsonBtn) {
+  exportJsonBtn.addEventListener("click", () => {
     const shouldExport = confirm("현재 항목을 JSON 파일로 내보낼까요?");
     if (shouldExport) {
       exportItemsJson();
@@ -265,89 +396,6 @@ if (resetLocalBtn) {
     } finally {
       resetLocalBtn.disabled = false;
     }
-  });
-}
-
-if (ghCloseBtn) {
-  ghCloseBtn.addEventListener("click", () => {
-    githubModal && githubModal.setAttribute("aria-hidden", "true");
-  });
-}
-
-if (exportBtn) {
-  exportBtn.addEventListener("click", () => {
-    exportItemsJson();
-  });
-}
-
-if (importBtn && importFile) {
-  importBtn.addEventListener("click", () => importFile.click());
-  importFile.addEventListener("change", (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        const data = parseJsonText(reader.result);
-        saveItems(data);
-        renderItems();
-        alert("JSON을 불러왔습니다.");
-        githubModal && githubModal.setAttribute("aria-hidden", "true");
-      } catch (err) {
-        alert("잘못된 JSON 파일입니다.");
-      }
-    };
-    reader.readAsText(file);
-  });
-}
-
-async function githubSaveToRepo(items, token, owner, repo, branch, path, message) {
-  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`;
-  let sha = null;
-  try {
-    const getResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}?ref=${branch}`, {
-      headers: { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json" },
-    });
-    if (getResp.ok) {
-      const d = await getResp.json();
-      sha = d.sha;
-    }
-  } catch (e) {}
-
-  const content = btoa(unescape(encodeURIComponent(JSON.stringify(items, null, 2))));
-  const body = { message: message || "Update items", content, branch };
-  if (sha) body.sha = sha;
-
-  const putResp = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${encodeURIComponent(path)}`, {
-    method: "PUT",
-    headers: { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json" },
-    body: JSON.stringify(body),
-  });
-  return putResp;
-}
-
-if (ghSaveBtn) {
-  ghSaveBtn.addEventListener("click", async () => {
-    const owner = ghOwner.value.trim();
-    const repo = ghRepo.value.trim();
-    const branch = (ghBranch.value || "main").trim();
-    const path = (ghPath.value || "data/items.json").trim();
-    const message = ghMessage.value.trim() || "Update items";
-    const token = ghToken.value.trim();
-    if (!owner || !repo || !token) { alert("Owner, repo, token 정보를 입력하세요."); return; }
-    const items = loadItems();
-    ghSaveBtn.disabled = true;
-    try {
-      const resp = await githubSaveToRepo(items, token, owner, repo, branch, path, message);
-      if (resp.ok) {
-        alert("GitHub에 저장되었습니다.");
-        githubModal && githubModal.setAttribute("aria-hidden", "true");
-      } else {
-        const txt = await resp.text();
-        alert("저장 실패: " + resp.status + "\n" + txt);
-      }
-    } catch (err) { alert("오류: " + err.message); }
-    ghSaveBtn.disabled = false;
   });
 }
 

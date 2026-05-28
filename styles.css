@@ -153,6 +153,15 @@ button {
 .item-list {
   display: grid;
   gap: 18px;
+  padding-bottom: 36px;
+}
+
+.site-credit {
+  padding: 0 0 64px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
 }
 
 .item-card {
@@ -283,6 +292,68 @@ button {
   border-radius: 14px;
 }
 
+.metronome-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.metronome-btn {
+  position: relative;
+  min-width: 142px;
+  min-height: 44px;
+  padding: 11px 18px 11px 38px;
+  background: var(--surface-strong);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-weight: 700;
+  text-align: left;
+  letter-spacing: 0;
+}
+
+.metronome-btn::before {
+  content: "";
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  background: var(--text-muted);
+  border-radius: 999px;
+  transform: translateY(-50%);
+}
+
+.metronome-btn:hover {
+  background: var(--surface-strong);
+}
+
+.metronome-btn[aria-pressed="true"] {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+.metronome-btn[aria-pressed="true"]:hover {
+  background: #fee2e2;
+}
+
+.metronome-btn[aria-pressed="true"]::before {
+  background: #dc2626;
+}
+
+.metronome-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.metronome-bpm {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
 .actions-row {
   display: flex;
   gap: 12px;
@@ -316,7 +387,15 @@ button {
 
 @media (max-width: 640px) {
   .app-shell {
-    padding: 18px;
+    padding: 18px 18px 0;
+  }
+
+  .item-list {
+    padding-bottom: 36px;
+  }
+
+  .site-credit {
+    padding-bottom: 84px;
   }
 
   .item-toggle,
@@ -324,53 +403,21 @@ button {
     padding-left: 16px;
     padding-right: 16px;
   }
-}
 
-/* Modal styles for GitHub save */
-.modal {
-  position: fixed;
-  inset: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  background: rgba(2,6,23,0.45);
-  z-index: 80;
-}
-.modal[aria-hidden="false"] {
-  display: flex;
-}
-.modal-panel {
-  background: var(--surface);
-  padding: 18px;
-  border-radius: 12px;
-  width: min(720px, 96%);
-  box-shadow: var(--shadow);
-}
-.modal-panel h3 {
-  margin: 0 0 12px;
-}
-.modal-row {
-  margin-bottom: 10px;
-}
-.modal-row label {
-  display: block;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-.modal-row input[type="text"],
-.modal-row input[type="password"] {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--text);
-}
-.modal-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 8px;
+  .metronome-controls {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .metronome-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .metronome-bpm {
+    white-space: nowrap;
+  }
 }
 
 .scroll-top-btn {

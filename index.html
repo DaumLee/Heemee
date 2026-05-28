@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Heemee</title>
-  <link rel="stylesheet" href="styles.css?v=20260528-2" />
+  <link rel="stylesheet" href="styles.css?v=20260528-12" />
 </head>
 <body>
   <div class="app-shell">
@@ -27,6 +27,8 @@
     <main>
       <section id="itemList" class="item-list"></section>
     </main>
+
+    <footer class="site-credit">Made by daumlee</footer>
   </div>
 
   <button id="scrollTopBtn" class="scroll-top-btn" type="button" aria-label="맨 위로">↑</button>
@@ -40,14 +42,18 @@
         </button>
       </div>
       <div class="item-details">
-        <div class="field-row audio-row">
+        <!-- <div class="field-row audio-row">
           <label>재생</label>
           <audio controls class="audio-player"></audio>
+        </div> -->
+        <div class="field-row metronome-row">
+          <label>메트로놈</label>
+          <div class="metronome-controls">
+            <button type="button" class="metronome-btn" aria-pressed="false">Play</button>
+            <span class="metronome-bpm"></span>
+          </div>
         </div>
-        <div class="field-row">
-          <label>정보</label>
-          <textarea class="info" placeholder="BPM, 구성 등" readonly></textarea>
-        </div>
+        <textarea class="info" hidden readonly></textarea>
         <div class="field-row">
           <label>가사</label>
           <textarea class="lyrics" placeholder="가사를 입력하세요" readonly></textarea>
@@ -60,44 +66,6 @@
     </article>
   </template>
 
-  <!-- GitHub 저장 모달 -->
-  <div id="githubModal" class="modal" aria-hidden="true">
-    <div class="modal-panel">
-      <h3>GitHub에 저장</h3>
-      <div class="modal-row">
-        <label>Owner (소유자)</label>
-        <input id="ghOwner" type="text" placeholder="your-username" />
-      </div>
-      <div class="modal-row">
-        <label>Repository</label>
-        <input id="ghRepo" type="text" placeholder="your-repo" />
-      </div>
-      <div class="modal-row">
-        <label>Branch</label>
-        <input id="ghBranch" type="text" placeholder="main" value="main" />
-      </div>
-      <div class="modal-row">
-        <label>Path (저장 경로)</label>
-        <input id="ghPath" type="text" placeholder="data/items.json" value="data/items.json" />
-      </div>
-      <div class="modal-row">
-        <label>Commit 메시지</label>
-        <input id="ghMessage" type="text" placeholder="Update items" />
-      </div>
-      <div class="modal-row">
-        <label>Personal Access Token</label>
-        <input id="ghToken" type="password" placeholder="ghp_... (required)" />
-      </div>
-      <div class="modal-actions">
-        <button id="ghSaveBtn">저장하기</button>
-        <button id="ghCloseBtn">닫기</button>
-        <button id="exportBtn">내보내기 (JSON)</button>
-        <input id="importFile" type="file" accept="application/json" style="display:none" />
-        <button id="importBtn">가져오기 (JSON)</button>
-      </div>
-    </div>
-  </div>
-
-  <script src="script.js?v=20260528-2"></script>
+  <script src="script.js?v=20260528-6"></script>
 </body>
 </html>
