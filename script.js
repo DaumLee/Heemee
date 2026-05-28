@@ -8,11 +8,15 @@ const normalizeItem = (item) => ({
   info: item.info ?? DEFAULT_INFO_TEXT,
 });
 
+const parseJsonText = (text) => {
+  return JSON.parse(text.replace(/^\uFEFF/, ""));
+};
+
 const loadItems = () => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return [];
   try {
-    const parsed = JSON.parse(saved);
+    const parsed = parseJsonText(saved);
     return Array.isArray(parsed) ? parsed.map(normalizeItem) : [];
   } catch (error) {
     console.error("저장된 데이터를 불러오는 중 오류가 발생했습니다.", error);
@@ -145,14 +149,18 @@ const loadTheme = () => {
   };
 
   syncTheme();
-  themeQuery.addEventListener("change", syncTheme);
+  if (themeQuery.addEventListener) {
+    themeQuery.addEventListener("change", syncTheme);
+  } else if (themeQuery.addListener) {
+    themeQuery.addListener(syncTheme);
+  }
 };
 
 const renderItems = () => {
   itemList.innerHTML = "";
   const items = loadItems();
   if (items.length === 0) {
-    itemList.innerHTML = `<p class="empty-state">새 항목을 추가해보세요.</p>`;
+    itemList.innerHTML = `<p class="empty-state">표시할 음원 데이터를 불러오지 못했습니다.</p>`;
     return;
   }
 
@@ -223,10 +231,13 @@ if (resetLocalBtn) {
     if (!shouldReset) return;
 
     resetLocalBtn.disabled = true;
-    localStorage.removeItem(STORAGE_KEY);
-    localStorage.removeItem("audioItemTheme");
-    await loadInitialData();
-    resetLocalBtn.disabled = false;
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem("audioItemTheme");
+      await loadInitialData();
+    } finally {
+      resetLocalBtn.disabled = false;
+    }
   });
 }
 
@@ -250,7 +261,7 @@ if (importBtn && importFile) {
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        const data = JSON.parse(reader.result);
+        const data = parseJsonText(reader.result);
         saveItems(data);
         renderItems();
         alert("JSON을 불러왔습니다.");
@@ -324,13 +335,14 @@ async function loadInitialData() {
   try {
     const resp = await fetch("data/items.json", { cache: "no-store" });
     if (resp.ok) {
-      const data = await resp.json();
+      const data = parseJsonText(await resp.text());
       if (Array.isArray(data)) {
         saveItems(data.map(normalizeItem));
         renderItems();
         return;
       }
     }
+    console.warn("Could not load data/items.json:", resp.status, resp.statusText);
   } catch (err) {
     console.warn("Could not load external data/items.json:", err);
   }
@@ -339,5 +351,9 @@ async function loadInitialData() {
   renderItems();
 }
 
-loadTheme();
+try {
+  loadTheme();
+} catch (error) {
+  console.warn("Could not sync theme:", error);
+}
 loadInitialData();
