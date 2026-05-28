@@ -1,5 +1,6 @@
 const itemList = document.getElementById("itemList");
 const itemTemplate = document.getElementById("itemTemplate");
+const scrollTopBtn = document.getElementById("scrollTopBtn");
 const STORAGE_KEY = "audioItemStorage";
 const DEFAULT_INFO_TEXT = "BPM: \nKey: \n구성: \n메모: ";
 
@@ -108,12 +109,23 @@ const createItemNode = (itemData = {}) => {
   });
 
   toggle.addEventListener("click", () => {
-    card.classList.toggle("open");
+    const shouldOpen = !card.classList.contains("open");
+    itemList.querySelectorAll(".item-card.open").forEach((openCard) => {
+      if (openCard !== card) {
+        openCard.classList.remove("open");
+      }
+    });
+    card.classList.toggle("open", shouldOpen);
     if (card.classList.contains("open")) {
       requestAnimationFrame(() => {
         autoResizeTextArea(lyricsInput);
         autoResizeTextArea(infoInput);
         autoResizeTextArea(notesInput);
+        card.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    } else {
+      requestAnimationFrame(() => {
+        card.scrollIntoView({ behavior: "smooth", block: "start" });
       });
     }
   });
@@ -188,6 +200,19 @@ if (itemList) {
     event.preventDefault();
     persistDomOrder();
   });
+}
+
+if (scrollTopBtn) {
+  const syncScrollTopButton = () => {
+    scrollTopBtn.classList.toggle("visible", window.scrollY > 240);
+  };
+
+  scrollTopBtn.addEventListener("click", () => {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+
+  window.addEventListener("scroll", syncScrollTopButton, { passive: true });
+  syncScrollTopButton();
 }
 
 // --- GitHub 저장 관련 UI 핸들러 ---

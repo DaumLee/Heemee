@@ -131,15 +131,18 @@ button {
 
 .reset-local-btn {
   padding: 10px 14px;
-  background: var(--button-danger);
-  color: #fff;
+  background: var(--surface-strong);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
   font-weight: 600;
 }
 
 .reset-local-btn:hover {
-  background: var(--button-danger-hover);
+  background: var(--button-primary);
+  color: #fff;
+  border-color: var(--button-primary);
 }
 
 .reset-local-btn:disabled {
@@ -159,6 +162,7 @@ button {
   box-shadow: var(--shadow);
   transition: opacity 0.16s ease, transform 0.16s ease;
   cursor: grab;
+  scroll-margin-top: 18px;
 }
 
 .item-card.dragging {
@@ -193,14 +197,17 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--button-primary);
-  color: white;
+  background: var(--surface-strong);
+  color: var(--text);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .item-toggle:hover {
-  background: var(--button-primary-hover);
+  background: var(--button-primary);
+  border-color: var(--button-primary);
+  color: #fff;
 }
 
 .item-title {
@@ -364,4 +371,36 @@ button {
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 8px;
+}
+
+.scroll-top-btn {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 70;
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--button-primary);
+  color: #fff;
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  font-size: 1.25rem;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease, background 0.2s ease;
+}
+
+.scroll-top-btn.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.scroll-top-btn:hover {
+  background: var(--button-primary-hover);
 }
