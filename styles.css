@@ -410,17 +410,18 @@ button {
 
   .metronome-controls {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: max-content minmax(0, 1fr);
     align-items: center;
   }
 
   .metronome-btn {
-    width: 100%;
-    min-width: 0;
+    min-width: 112px;
+    padding-right: 16px;
   }
 
   .metronome-bpm {
-    white-space: nowrap;
+    min-width: 0;
+    white-space: normal;
   }
 }
 
