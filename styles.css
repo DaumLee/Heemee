@@ -48,6 +48,12 @@ body {
   color: var(--text);
 }
 
+body.touch-reordering {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
 .app-shell {
   max-width: 960px;
   margin: 0 auto;
@@ -82,29 +88,6 @@ button {
   transition: background 0.2s ease, color 0.2s ease;
 }
 
-.legacy-hidden {
-  display: none !important;
-}
-
-#addItemBtn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 20px;
-  padding: 10px 14px;
-  background: var(--button-primary);
-  color: #fff;
-  border-radius: 12px;
-  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
-  font-weight: 600;
-  transition: background 0.2s ease, filter 0.12s ease;
-}
-
-#addItemBtn:hover {
-  background: var(--button-primary-hover);
-  filter: brightness(1.03);
-}
-
 .header-buttons {
   display: inline-flex;
   align-items: center;
@@ -121,6 +104,7 @@ button {
   padding: 10px 14px;
   background: linear-gradient(180deg, #24292e 0%, #2f363d 100%);
   color: #fff;
+  border: 1px solid #57606a;
   border-radius: 12px;
   box-shadow: 0 6px 14px rgba(15, 23, 42, 0.12);
   font-weight: 600;
@@ -172,12 +156,22 @@ button {
   transition: opacity 0.16s ease, transform 0.16s ease;
   cursor: grab;
   scroll-margin-top: 18px;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .item-card.dragging {
   opacity: 0.45;
   transform: scale(0.99);
   cursor: grabbing;
+}
+
+.item-card.touch-dragging {
+  position: relative;
+  z-index: 20;
+  opacity: 0.58;
+  transform: scale(0.985);
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.18);
 }
 
 .item-header {
@@ -285,6 +279,16 @@ button {
 
 .field-row textarea[readonly] {
   resize: none;
+}
+
+.field-row textarea.lyrics[readonly] {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.field-row textarea.lyrics[readonly]:focus {
+  outline: none;
 }
 
 .audio-row audio {

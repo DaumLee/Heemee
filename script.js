@@ -2,6 +2,10 @@ const itemList = document.getElementById("itemList");
 const itemTemplate = document.getElementById("itemTemplate");
 const scrollTopBtn = document.getElementById("scrollTopBtn");
 const STORAGE_KEY = "audioItemStorage";
+const TOUCH_DRAG_DELAY = 420;
+const TOUCH_MOVE_CANCEL_DISTANCE = 9;
+const TOUCH_SCROLL_EDGE_SIZE = 82;
+const TOUCH_SCROLL_STEP = 14;
 const DEFAULT_INFO_TEXT = "BPM: \nKey: \n구성: \n메모: ";
 const BPM_PATTERN = /\bbpm\s*[:=]?\s*(\d{2,3}(?:\.\d+)?)/i;
 const TIME_SIGNATURE_PATTERNS = [
@@ -23,6 +27,7 @@ let metronomeState = {
   activeCard: null,
   beat: 0,
 };
+let touchDragState = null;
 
 const normalizeItem = (item) => ({
   ...item,
@@ -299,6 +304,135 @@ const persistDomOrder = () => {
   saveItems(getItemsFromDom());
 };
 
+const isDragIgnoredTarget = (target) => {
+  if (!(target instanceof Element)) return false;
+
+  return Boolean(target.closest("button, input, textarea, audio, label, select, a"));
+};
+
+const moveDraggingCard = (card, clientY) => {
+  const afterElement = getDragAfterElement(itemList, clientY);
+  if (afterElement) {
+    itemList.insertBefore(card, afterElement);
+  } else {
+    itemList.appendChild(card);
+  }
+};
+
+const scrollNearViewportEdge = (clientY) => {
+  if (clientY < TOUCH_SCROLL_EDGE_SIZE) {
+    window.scrollBy({ top: -TOUCH_SCROLL_STEP, behavior: "auto" });
+  } else if (clientY > window.innerHeight - TOUCH_SCROLL_EDGE_SIZE) {
+    window.scrollBy({ top: TOUCH_SCROLL_STEP, behavior: "auto" });
+  }
+};
+
+const clearTouchDragTimer = () => {
+  if (touchDragState?.timerId) {
+    clearTimeout(touchDragState.timerId);
+  }
+};
+
+const beginTouchDrag = () => {
+  if (!touchDragState?.card || touchDragState.card.classList.contains("open")) return;
+
+  touchDragState.isDragging = true;
+  touchDragState.card.classList.add("dragging", "touch-dragging");
+  document.body.classList.add("touch-reordering");
+};
+
+const resetTouchDrag = ({ persist = false } = {}) => {
+  const activeState = touchDragState;
+  clearTouchDragTimer();
+
+  if (activeState?.card) {
+    activeState.card.classList.remove("dragging", "touch-dragging");
+  }
+
+  document.body.classList.remove("touch-reordering");
+  touchDragState = null;
+
+  if (persist && activeState?.isDragging) {
+    persistDomOrder();
+  }
+};
+
+const setupTouchReorder = (card) => {
+  card.addEventListener(
+    "touchstart",
+    (event) => {
+      if (event.touches.length !== 1 || card.classList.contains("open") || isDragIgnoredTarget(event.target)) {
+        return;
+      }
+
+      const touch = event.touches[0];
+      clearTouchDragTimer();
+      touchDragState = {
+        card,
+        startX: touch.clientX,
+        startY: touch.clientY,
+        isDragging: false,
+        suppressClick: false,
+        timerId: window.setTimeout(beginTouchDrag, TOUCH_DRAG_DELAY),
+      };
+    },
+    { passive: true },
+  );
+
+  card.addEventListener(
+    "touchmove",
+    (event) => {
+      if (!touchDragState || touchDragState.card !== card || event.touches.length !== 1) return;
+
+      const touch = event.touches[0];
+      const deltaX = touch.clientX - touchDragState.startX;
+      const deltaY = touch.clientY - touchDragState.startY;
+      const distance = Math.hypot(deltaX, deltaY);
+
+      if (!touchDragState.isDragging && distance > TOUCH_MOVE_CANCEL_DISTANCE) {
+        resetTouchDrag();
+        return;
+      }
+
+      if (!touchDragState.isDragging) return;
+
+      event.preventDefault();
+      touchDragState.suppressClick = true;
+      moveDraggingCard(card, touch.clientY);
+      scrollNearViewportEdge(touch.clientY);
+    },
+    { passive: false },
+  );
+
+  card.addEventListener("touchend", () => {
+    const shouldSuppressClick = touchDragState?.card === card && touchDragState.isDragging;
+    resetTouchDrag({ persist: shouldSuppressClick });
+
+    if (shouldSuppressClick) {
+      card.dataset.suppressNextClick = "true";
+      window.setTimeout(() => {
+        delete card.dataset.suppressNextClick;
+      }, 0);
+    }
+  });
+
+  card.addEventListener("touchcancel", () => {
+    resetTouchDrag();
+  });
+
+  card.addEventListener(
+    "click",
+    (event) => {
+      if (card.dataset.suppressNextClick !== "true") return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      delete card.dataset.suppressNextClick;
+    },
+    true,
+  );
+};
+
 const createItemNode = (itemData = {}) => {
   const clone = itemTemplate.content.cloneNode(true);
   const card = clone.querySelector(".item-card");
@@ -355,6 +489,7 @@ const createItemNode = (itemData = {}) => {
   card.dataset.itemName = itemData.name || "";
   infoInput.value = itemData.info ?? DEFAULT_INFO_TEXT;
   lyricsInput.value = itemData.lyrics || "";
+  lyricsInput.tabIndex = -1;
   notesInput.value = itemData.notes || "";
   updateTitle();
   autoResizeTextArea(lyricsInput);
@@ -370,7 +505,7 @@ const createItemNode = (itemData = {}) => {
       return;
     }
 
-    if (event.target.closest("button, input, textarea, audio, label")) {
+    if (isDragIgnoredTarget(event.target)) {
       event.preventDefault();
       return;
     }
@@ -384,6 +519,7 @@ const createItemNode = (itemData = {}) => {
     card.classList.remove("dragging");
     persistDomOrder();
   });
+  setupTouchReorder(card);
 
   toggle.addEventListener("click", () => {
     const shouldOpen = !card.classList.contains("open");
@@ -479,12 +615,7 @@ if (itemList) {
     if (!draggingCard) return;
 
     event.preventDefault();
-    const afterElement = getDragAfterElement(itemList, event.clientY);
-    if (afterElement) {
-      itemList.insertBefore(draggingCard, afterElement);
-    } else {
-      itemList.appendChild(draggingCard);
-    }
+    moveDraggingCard(draggingCard, event.clientY);
   });
 
   itemList.addEventListener("drop", (event) => {
@@ -538,7 +669,6 @@ if (resetLocalBtn) {
     resetLocalBtn.disabled = true;
     try {
       localStorage.removeItem(STORAGE_KEY);
-      localStorage.removeItem("audioItemTheme");
       await loadInitialData();
     } finally {
       resetLocalBtn.disabled = false;
