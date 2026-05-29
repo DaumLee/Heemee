@@ -89,11 +89,12 @@ button {
 }
 
 .header-buttons {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
   margin-top: 20px;
+  width: 100%;
 }
 
 /* Json export button */
@@ -113,7 +114,8 @@ button {
 .json-btn svg { display: block; }
 .json-btn:hover { filter: brightness(1.08); }
 
-.reset-local-btn {
+.reset-local-btn,
+.eighth-note-toggle-btn {
   padding: 10px 14px;
   background: var(--surface-strong);
   color: var(--text);
@@ -123,10 +125,50 @@ button {
   font-weight: 600;
 }
 
-.reset-local-btn:hover {
+.reset-local-btn:hover,
+.eighth-note-toggle-btn:hover {
   background: var(--button-primary);
   color: #fff;
   border-color: var(--button-primary);
+}
+
+.eighth-note-toggle-btn {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0;
+  flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.eighth-note-toggle-btn[aria-pressed="true"] {
+  background: var(--button-primary);
+  color: #fff;
+  border-color: var(--button-primary);
+}
+
+.note-icon {
+  display: block;
+  width: 24px;
+  height: 24px;
+  transform-origin: center;
+  transition: transform 0.18s ease;
+}
+
+.eighth-note-toggle-btn:hover .note-icon {
+  transform: translateY(-1px);
+}
+
+.note-icon-eighth,
+.eighth-note-toggle-btn[aria-pressed="true"] .note-icon-quarter {
+  display: none;
+}
+
+.eighth-note-toggle-btn[aria-pressed="true"] .note-icon-eighth {
+  display: block;
 }
 
 .reset-local-btn:disabled {
@@ -176,22 +218,36 @@ button {
 
 .item-header {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   padding: 18px 24px;
 }
 
+.item-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .item-title {
-  width: 100%;
+  width: auto;
   min-width: 0;
   margin: 0;
-  padding: 10px 14px;
   color: var(--text);
   font-family: inherit;
   font-size: 1rem;
   font-weight: 700;
   overflow-wrap: anywhere;
+}
+
+.metronome-bpm {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .item-toggle {
@@ -296,41 +352,24 @@ button {
   border-radius: 14px;
 }
 
-.metronome-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
 .metronome-btn {
-  position: relative;
-  min-width: 142px;
-  min-height: 44px;
-  padding: 11px 18px 11px 38px;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
   background: var(--surface-strong);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 12px;
-  font-weight: 700;
-  text-align: left;
-  letter-spacing: 0;
-}
-
-.metronome-btn::before {
-  content: "";
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  width: 9px;
-  height: 9px;
-  background: var(--text-muted);
-  border-radius: 999px;
-  transform: translateY(-50%);
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 .metronome-btn:hover {
-  background: var(--surface-strong);
+  background: var(--button-primary);
+  border-color: var(--button-primary);
+  color: #fff;
 }
 
 .metronome-btn[aria-pressed="true"] {
@@ -343,8 +382,8 @@ button {
   background: #fee2e2;
 }
 
-.metronome-btn[aria-pressed="true"]::before {
-  background: #dc2626;
+.metronome-btn[aria-pressed="true"] .metronome-icon {
+  transform: rotate(-8deg);
 }
 
 .metronome-btn:disabled {
@@ -352,10 +391,9 @@ button {
   opacity: 0.55;
 }
 
-.metronome-bpm {
-  color: var(--text-muted);
-  font-size: 0.95rem;
-  font-weight: 700;
+.metronome-icon {
+  display: block;
+  transition: transform 0.2s ease;
 }
 
 .actions-row {
@@ -402,20 +440,18 @@ button {
     padding-bottom: 84px;
   }
 
-  .item-toggle,
+  .item-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: 16px;
+  }
+
+  .item-header-actions {
+    gap: 8px;
+  }
+
   .item-details {
     padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .metronome-controls {
-    display: grid;
-    grid-template-columns: max-content minmax(0, 1fr);
-    align-items: center;
-  }
-
-  .metronome-btn {
-    min-width: 112px;
     padding-right: 16px;
   }
 

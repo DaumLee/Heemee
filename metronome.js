@@ -1,11 +1,13 @@
 const HeemeeMetronome = (() => {
   const BPM_PATTERN = /\bbpm\s*[:=]?\s*(\d{2,3}(?:\.\d+)?)/i;
   const TIME_SIGNATURE_PATTERNS = [
+    { pattern: /\b8\s*\/\s*8\b|eight[-\s]?eight/i, value: { label: "8/8", beatsPerMeasure: 8, accents: [0] } },
     { pattern: /\b6\s*\/\s*8\b|six[-\s]?eight/i, value: { label: "6/8", beatsPerMeasure: 6, accents: [0, 3] } },
     { pattern: /\b3\s*\/\s*4\b|three[-\s]?four/i, value: { label: "3/4", beatsPerMeasure: 3, accents: [0] } },
     { pattern: /\b4\s*\/\s*4\b|four[-\s]?four/i, value: { label: "4/4", beatsPerMeasure: 4, accents: [0] } },
   ];
   const DEFAULT_TIME_SIGNATURE = { label: "4/4", beatsPerMeasure: 4, accents: [0] };
+  const EIGHTH_NOTE_TIME_SIGNATURE = { label: "8/8", beatsPerMeasure: 8, accents: [0] };
 
   let state = {
     audioContext: null,
@@ -30,20 +32,25 @@ const HeemeeMetronome = (() => {
     return found ? found.value : DEFAULT_TIME_SIGNATURE;
   };
 
-  const getConfig = (text = "") => {
+  const getConfig = (text = "", options = {}) => {
     const bpm = parseBpm(text);
     if (!bpm) return null;
 
+    const timeSignature = parseTimeSignature(text);
+    const shouldUseEighthNotes = options.eighthNoteMode && timeSignature.label === "4/4";
+
     return {
       bpm,
-      timeSignature: parseTimeSignature(text),
+      playbackBpm: shouldUseEighthNotes ? bpm * 2 : bpm,
+      timeSignature: shouldUseEighthNotes ? EIGHTH_NOTE_TIME_SIGNATURE : timeSignature,
     };
   };
 
   const setButtonState = (button, isPlaying) => {
     if (!button) return;
-    button.textContent = isPlaying ? "Stop" : "Play";
     button.setAttribute("aria-pressed", String(isPlaying));
+    button.setAttribute("aria-label", isPlaying ? "메트로놈 정지" : "메트로놈 재생");
+    button.classList.toggle("is-playing", isPlaying);
   };
 
   const stop = () => {
@@ -138,7 +145,7 @@ const HeemeeMetronome = (() => {
     const context = state.audioContext;
     if (!context || context.state !== "running") return;
 
-    const secondsPerBeat = 60 / config.bpm;
+    const secondsPerBeat = 60 / (config.playbackBpm ?? config.bpm);
     const scheduleAheadTime = 0.1;
     state.nextClickTime = context.currentTime + 0.012;
 

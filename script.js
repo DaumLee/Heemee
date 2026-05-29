@@ -2,6 +2,7 @@ const itemList = document.getElementById("itemList");
 const itemTemplate = document.getElementById("itemTemplate");
 const scrollTopBtn = document.getElementById("scrollTopBtn");
 const STORAGE_KEY = "audioItemStorage";
+const EIGHTH_NOTE_MODE_KEY = "heemeeEighthNoteMode";
 const TOUCH_DRAG_DELAY = 420;
 const TOUCH_MOVE_CANCEL_DISTANCE = 9;
 const TOUCH_SCROLL_EDGE_SIZE = 82;
@@ -9,6 +10,7 @@ const TOUCH_SCROLL_STEP = 14;
 const DEFAULT_INFO_TEXT = "BPM: \nKey: \n구성: \n메모: ";
 const metronome = window.HeemeeMetronome;
 let touchDragState = null;
+let eighthNoteMode = localStorage.getItem(EIGHTH_NOTE_MODE_KEY) === "true";
 
 const normalizeItem = (item) => ({
   ...item,
@@ -50,6 +52,16 @@ const getItemsFromDom = () => {
 
 const persistDomOrder = () => {
   saveItems(getItemsFromDom());
+};
+
+const getMetronomeOptions = () => ({
+  eighthNoteMode,
+});
+
+const syncAllMetronomeControls = () => {
+  itemList?.querySelectorAll(".item-card").forEach((card) => {
+    card.syncMetronomeControls?.();
+  });
 };
 
 const isDragIgnoredTarget = (target) => {
@@ -207,12 +219,12 @@ const createItemNode = (itemData = {}) => {
   };
 
   const syncMetronomeControls = () => {
-    const config = metronome.getConfig(infoInput.value);
-    metronomeBpm.textContent = config ? `${config.bpm} BPM · ${config.timeSignature.label}` : "No BPM";
+    const config = metronome.getConfig(infoInput.value, getMetronomeOptions());
+    metronomeBpm.textContent = config ? `${config.bpm} BPM · ${config.timeSignature.label}` : "BPM 없음";
     metronomeBtn.disabled = !config;
     metronomeBtn.title = config
-      ? `Play metronome at ${config.bpm} BPM in ${config.timeSignature.label}`
-      : "Add BPM info first";
+      ? `${config.bpm} BPM ${config.timeSignature.label} 메트로놈`
+      : "BPM 정보가 없습니다";
 
     if (!config && metronome.isActiveButton(metronomeBtn)) {
       metronome.stop();
@@ -297,7 +309,7 @@ const createItemNode = (itemData = {}) => {
   notesInput.addEventListener("input", persistCurrentItem);
   infoInput.addEventListener("input", syncMetronomeControls);
   metronomeBtn.addEventListener("click", async () => {
-    const config = metronome.getConfig(infoInput.value);
+    const config = metronome.getConfig(infoInput.value, getMetronomeOptions());
     if (!config) return;
 
     if (metronome.isActiveButton(metronomeBtn)) {
@@ -307,6 +319,8 @@ const createItemNode = (itemData = {}) => {
 
     await metronome.start(card, metronomeBtn, config);
   });
+
+  card.syncMetronomeControls = syncMetronomeControls;
 
   return clone;
 };
@@ -387,6 +401,7 @@ if (scrollTopBtn) {
 
 const exportJsonBtn = document.getElementById("exportJsonBtn");
 const resetLocalBtn = document.getElementById("resetLocalBtn");
+const eighthNoteToggleBtn = document.getElementById("eighthNoteToggleBtn");
 
 const exportItemsJson = () => {
   const items = loadItems();
@@ -422,6 +437,24 @@ if (resetLocalBtn) {
       resetLocalBtn.disabled = false;
     }
   });
+}
+
+if (eighthNoteToggleBtn) {
+  const syncEighthNoteToggle = () => {
+    eighthNoteToggleBtn.setAttribute("aria-pressed", String(eighthNoteMode));
+    eighthNoteToggleBtn.setAttribute("aria-label", eighthNoteMode ? "4분 음표로 전환" : "8분 음표로 전환");
+    eighthNoteToggleBtn.title = eighthNoteMode ? "4분 음표로 전환" : "8분 음표로 전환";
+  };
+
+  eighthNoteToggleBtn.addEventListener("click", () => {
+    eighthNoteMode = !eighthNoteMode;
+    localStorage.setItem(EIGHTH_NOTE_MODE_KEY, String(eighthNoteMode));
+    syncEighthNoteToggle();
+    metronome.stop();
+    syncAllMetronomeControls();
+  });
+
+  syncEighthNoteToggle();
 }
 
 // Load theme, then ensure initial items are available (from localStorage or external file)
