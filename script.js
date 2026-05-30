@@ -7,6 +7,7 @@ const TOUCH_DRAG_DELAY = 420;
 const TOUCH_MOVE_CANCEL_DISTANCE = 9;
 const TOUCH_SCROLL_EDGE_SIZE = 82;
 const TOUCH_SCROLL_STEP = 14;
+const GITHUB_LFS_MEDIA_BASE_URL = "https://media.githubusercontent.com/media/DaumLee/Heemee/main/";
 const DEFAULT_INFO_TEXT = "BPM: \nKey: \n구성: \n메모: ";
 const metronome = window.HeemeeMetronome;
 let touchDragState = null;
@@ -52,6 +53,15 @@ const formatAudioTime = (seconds) => {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = Math.floor(seconds % 60).toString().padStart(2, "0");
   return `${minutes}:${remainingSeconds}`;
+};
+
+const getAudioSourceUrl = (audioDataUrl) => {
+  if (!audioDataUrl) return "";
+  if (/^https?:\/\//i.test(audioDataUrl)) return audioDataUrl;
+  if (window.location.hostname.endsWith("github.io") && audioDataUrl.startsWith("audio/")) {
+    return `${GITHUB_LFS_MEDIA_BASE_URL}${audioDataUrl}`;
+  }
+  return audioDataUrl;
 };
 
 const loadItems = () => {
@@ -338,7 +348,7 @@ const createItemNode = (itemData = {}) => {
   const hasAudio = Boolean(itemData.audioDataUrl);
   if (hasAudio) {
     audioPlayer.dataset.audioDataUrl = itemData.audioDataUrl;
-    audioPlayer.src = itemData.audioDataUrl;
+    audioPlayer.src = getAudioSourceUrl(itemData.audioDataUrl);
     syncAudioControls();
   } else {
     audioToggleBtn.remove();
