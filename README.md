@@ -8,10 +8,9 @@ https://daumlee.github.io/Heemee/
 
 ## 주요 기능
 
-- `data/items.json`의 음원 목록 표시
-- 곡별 제목, 재생 영역, 정보, 가사, 주의사항 표시
+- 곡별 음원, 메트로놈, 가사, 주의사항 등 기록
 - 주의사항 수정 내용과 항목 순서를 브라우저 `localStorage`에 저장
-- 아이템 카드를 드래그해서 순서 변경
+- 아이템 카드를 드래그/롱탭해서 순서 변경 가능
 
 ## 프로젝트 구조
 
@@ -32,10 +31,10 @@ https://daumlee.github.io/Heemee/
 {
   "id": "item-id",
   "name": "곡 제목",
-  "info": "BPM: \nKey: \n구성: \n메모: ",
+  "info": "BPM: ; 박자표",
   "lyrics": "가사",
-  "notes": "",
-  "audioDataUrl": ""
+  "notes": "주의사항",
+  "audioDataUrl": "음원 파일 주소"
 }
 ```
 

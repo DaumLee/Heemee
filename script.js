@@ -2,32 +2,15 @@ const itemList = document.getElementById("itemList");
 const itemTemplate = document.getElementById("itemTemplate");
 const scrollTopBtn = document.getElementById("scrollTopBtn");
 const STORAGE_KEY = "audioItemStorage";
+const EIGHTH_NOTE_MODE_KEY = "heemeeEighthNoteMode";
 const TOUCH_DRAG_DELAY = 420;
 const TOUCH_MOVE_CANCEL_DISTANCE = 9;
 const TOUCH_SCROLL_EDGE_SIZE = 82;
 const TOUCH_SCROLL_STEP = 14;
 const DEFAULT_INFO_TEXT = "BPM: \nKey: \n구성: \n메모: ";
-const BPM_PATTERN = /\bbpm\s*[:=]?\s*(\d{2,3}(?:\.\d+)?)/i;
-const TIME_SIGNATURE_PATTERNS = [
-  { pattern: /\b6\s*\/\s*8\b|six[-\s]?eight/i, value: { label: "6/8", beatsPerMeasure: 6, accents: [0, 3] } },
-  { pattern: /\b3\s*\/\s*4\b|three[-\s]?four/i, value: { label: "3/4", beatsPerMeasure: 3, accents: [0] } },
-  { pattern: /\b4\s*\/\s*4\b|four[-\s]?four/i, value: { label: "4/4", beatsPerMeasure: 4, accents: [0] } },
-];
-const DEFAULT_TIME_SIGNATURE = { label: "4/4", beatsPerMeasure: 4, accents: [0] };
-let metronomeState = {
-  audioContext: null,
-  audioPools: null,
-  audioPoolIndexes: {
-    primary: 0,
-    secondary: 0,
-    regular: 0,
-  },
-  timerId: null,
-  activeButton: null,
-  activeCard: null,
-  beat: 0,
-};
+const metronome = window.HeemeeMetronome;
 let touchDragState = null;
+let eighthNoteMode = localStorage.getItem(EIGHTH_NOTE_MODE_KEY) === "true";
 
 const normalizeItem = (item) => ({
   ...item,
@@ -36,239 +19,6 @@ const normalizeItem = (item) => ({
 
 const parseJsonText = (text) => {
   return JSON.parse(text.replace(/^\uFEFF/, ""));
-};
-
-const parseBpm = (text = "") => {
-  const match = text.match(BPM_PATTERN);
-  if (!match) return null;
-
-  const bpm = Number(match[1]);
-  if (!Number.isFinite(bpm) || bpm < 20 || bpm > 300) return null;
-  return bpm;
-};
-
-const parseTimeSignature = (text = "") => {
-  const found = TIME_SIGNATURE_PATTERNS.find(({ pattern }) => pattern.test(text));
-  return found ? found.value : DEFAULT_TIME_SIGNATURE;
-};
-
-const getMetronomeConfig = (text = "") => {
-  const bpm = parseBpm(text);
-  if (!bpm) return null;
-
-  return {
-    bpm,
-    timeSignature: parseTimeSignature(text),
-  };
-};
-
-const setMetronomeButtonState = (button, isPlaying) => {
-  if (!button) return;
-  button.textContent = isPlaying ? "Stop" : "Play";
-  button.setAttribute("aria-pressed", String(isPlaying));
-};
-
-const stopMetronome = () => {
-  if (metronomeState.timerId) {
-    clearInterval(metronomeState.timerId);
-  }
-
-  Object.values(metronomeState.audioPools || {}).forEach((pool) => {
-    pool.forEach((audio) => {
-      audio.pause();
-      audio.currentTime = 0;
-    });
-  });
-
-  setMetronomeButtonState(metronomeState.activeButton, false);
-  metronomeState = {
-    ...metronomeState,
-    timerId: null,
-    activeButton: null,
-    activeCard: null,
-    beat: 0,
-  };
-};
-
-const getMetronomeAudioContext = () => {
-  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-  if (!AudioContextClass) return null;
-
-  if (!metronomeState.audioContext) {
-    metronomeState.audioContext = new AudioContextClass();
-  }
-
-  return metronomeState.audioContext;
-};
-
-const getClickKind = (timeSignature) => {
-  const beatInMeasure = metronomeState.beat % timeSignature.beatsPerMeasure;
-  const isPrimaryAccent = beatInMeasure === 0;
-  const isSecondaryAccent = !isPrimaryAccent && timeSignature.accents.includes(beatInMeasure);
-
-  if (isPrimaryAccent) return "primary";
-  if (isSecondaryAccent) return "secondary";
-  return "regular";
-};
-
-const getClickFrequency = (kind) => {
-  if (kind === "primary") return 1200;
-  if (kind === "secondary") return 1000;
-  return 760;
-};
-
-const bytesToBase64 = (bytes) => {
-  let binary = "";
-  const chunkSize = 0x8000;
-
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    const chunk = bytes.subarray(index, index + chunkSize);
-    binary += String.fromCharCode(...chunk);
-  }
-
-  return btoa(binary);
-};
-
-const writeAscii = (view, offset, text) => {
-  for (let index = 0; index < text.length; index += 1) {
-    view.setUint8(offset + index, text.charCodeAt(index));
-  }
-};
-
-const createClickWavDataUrl = (frequency, volume) => {
-  const sampleRate = 44100;
-  const duration = 0.065;
-  const sampleCount = Math.floor(sampleRate * duration);
-  const headerSize = 44;
-  const bytesPerSample = 2;
-  const buffer = new ArrayBuffer(headerSize + sampleCount * bytesPerSample);
-  const view = new DataView(buffer);
-
-  writeAscii(view, 0, "RIFF");
-  view.setUint32(4, 36 + sampleCount * bytesPerSample, true);
-  writeAscii(view, 8, "WAVE");
-  writeAscii(view, 12, "fmt ");
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * bytesPerSample, true);
-  view.setUint16(32, bytesPerSample, true);
-  view.setUint16(34, 8 * bytesPerSample, true);
-  writeAscii(view, 36, "data");
-  view.setUint32(40, sampleCount * bytesPerSample, true);
-
-  for (let sample = 0; sample < sampleCount; sample += 1) {
-    const progress = sample / sampleCount;
-    const attack = Math.min(1, progress / 0.08);
-    const decay = Math.max(0, 1 - progress);
-    const envelope = attack * decay * decay;
-    const wave = Math.sin((2 * Math.PI * frequency * sample) / sampleRate);
-    const value = Math.max(-1, Math.min(1, wave * envelope * volume));
-    view.setInt16(headerSize + sample * bytesPerSample, value * 0x7fff, true);
-  }
-
-  return `data:audio/wav;base64,${bytesToBase64(new Uint8Array(buffer))}`;
-};
-
-const createAudioPool = (src) => {
-  return Array.from({ length: 4 }, () => {
-    const audio = new Audio(src);
-    audio.preload = "auto";
-    audio.playsInline = true;
-    return audio;
-  });
-};
-
-const ensureMetronomeMedia = () => {
-  if (metronomeState.audioPools) return;
-
-  metronomeState.audioPools = {
-    primary: createAudioPool(createClickWavDataUrl(getClickFrequency("primary"), 0.75)),
-    secondary: createAudioPool(createClickWavDataUrl(getClickFrequency("secondary"), 0.62)),
-    regular: createAudioPool(createClickWavDataUrl(getClickFrequency("regular"), 0.5)),
-  };
-};
-
-const playMediaClick = (kind) => {
-  ensureMetronomeMedia();
-
-  const pool = metronomeState.audioPools?.[kind];
-  if (!pool) return false;
-
-  const index = metronomeState.audioPoolIndexes[kind] % pool.length;
-  const audio = pool[index];
-  metronomeState.audioPoolIndexes[kind] = index + 1;
-
-  audio.pause();
-  audio.currentTime = 0;
-
-  const playPromise = audio.play();
-  if (playPromise?.catch) {
-    playPromise.catch(() => {
-      playWebAudioClick(kind);
-    });
-  }
-
-  return true;
-};
-
-const unlockMetronomeAudio = async () => {
-  const context = getMetronomeAudioContext();
-  if (!context) return null;
-
-  if (context.state === "suspended") {
-    await context.resume();
-  }
-
-  return context;
-};
-
-const playWebAudioClick = (kind) => {
-  const context = metronomeState.audioContext;
-  if (!context || context.state === "suspended") return;
-
-  const now = context.currentTime;
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-
-  oscillator.type = "square";
-  oscillator.frequency.setValueAtTime(getClickFrequency(kind), now);
-  gain.gain.setValueAtTime(0.0001, now);
-  gain.gain.exponentialRampToValueAtTime(kind === "primary" ? 0.28 : kind === "secondary" ? 0.22 : 0.15, now + 0.004);
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.055);
-
-  oscillator.connect(gain);
-  gain.connect(context.destination);
-  oscillator.start(now);
-  oscillator.stop(now + 0.06);
-  oscillator.onended = () => {
-    oscillator.disconnect();
-    gain.disconnect();
-  };
-};
-
-const playMetronomeClick = ({ timeSignature }) => {
-  const kind = getClickKind(timeSignature);
-  playMediaClick(kind);
-  metronomeState.beat += 1;
-};
-
-const startMetronome = async (card, button, config) => {
-  stopMetronome();
-
-  metronomeState.activeButton = button;
-  metronomeState.activeCard = card;
-  metronomeState.beat = 0;
-  setMetronomeButtonState(button, true);
-
-  playMetronomeClick(config);
-  unlockMetronomeAudio().catch((error) => {
-    console.error("Metronome fallback audio could not be started.", error);
-  });
-  metronomeState.timerId = window.setInterval(() => {
-    playMetronomeClick(config);
-  }, 60000 / config.bpm);
 };
 
 const loadItems = () => {
@@ -302,6 +52,16 @@ const getItemsFromDom = () => {
 
 const persistDomOrder = () => {
   saveItems(getItemsFromDom());
+};
+
+const getMetronomeOptions = () => ({
+  eighthNoteMode,
+});
+
+const syncAllMetronomeControls = () => {
+  itemList?.querySelectorAll(".item-card").forEach((card) => {
+    card.syncMetronomeControls?.();
+  });
 };
 
 const isDragIgnoredTarget = (target) => {
@@ -439,7 +199,7 @@ const createItemNode = (itemData = {}) => {
   const toggle = clone.querySelector(".item-toggle");
   const title = clone.querySelector(".item-title");
   const details = clone.querySelector(".item-details");
-  const audioPlayer = clone.querySelector(".audio-player");
+  // const audioPlayer = clone.querySelector(".audio-player");
   const metronomeBtn = clone.querySelector(".metronome-btn");
   const metronomeBpm = clone.querySelector(".metronome-bpm");
   const infoInput = clone.querySelector(".info");
@@ -459,15 +219,15 @@ const createItemNode = (itemData = {}) => {
   };
 
   const syncMetronomeControls = () => {
-    const config = getMetronomeConfig(infoInput.value);
-    metronomeBpm.textContent = config ? `${config.bpm} BPM · ${config.timeSignature.label}` : "No BPM";
+    const config = metronome.getConfig(infoInput.value, getMetronomeOptions());
+    metronomeBpm.textContent = config ? `${config.bpm} BPM · ${config.timeSignature.label}` : "BPM 없음";
     metronomeBtn.disabled = !config;
     metronomeBtn.title = config
-      ? `Play metronome at ${config.bpm} BPM in ${config.timeSignature.label}`
-      : "Add BPM info first";
+      ? `${config.bpm} BPM ${config.timeSignature.label} 메트로놈`
+      : "BPM 정보가 없습니다";
 
-    if (!config && metronomeState.activeButton === metronomeBtn) {
-      stopMetronome();
+    if (!config && metronome.isActiveButton(metronomeBtn)) {
+      metronome.stop();
     }
   };
 
@@ -476,14 +236,14 @@ const createItemNode = (itemData = {}) => {
     textarea.style.height = `${textarea.scrollHeight}px`;
   };
 
-  const getCurrentItem = () => ({
-    id: card.dataset.itemId,
-    name: card.dataset.itemName || "",
-    info: infoInput.value,
-    lyrics: lyricsInput.value,
-    notes: notesInput.value,
-    audioDataUrl: audioPlayer.src || "",
-  });
+  // const getCurrentItem = () => ({
+  //   id: card.dataset.itemId,
+  //   name: card.dataset.itemName || "",
+  //   info: infoInput.value,
+  //   lyrics: lyricsInput.value,
+  //   notes: notesInput.value,
+  //   audioDataUrl: audioPlayer.src || "",
+  // });
 
   card.dataset.itemId = itemData.id || `item-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   card.dataset.itemName = itemData.name || "";
@@ -495,9 +255,9 @@ const createItemNode = (itemData = {}) => {
   autoResizeTextArea(lyricsInput);
   autoResizeTextArea(notesInput);
   syncMetronomeControls();
-  if (itemData.audioDataUrl) {
-    audioPlayer.src = itemData.audioDataUrl;
-  }
+  // if (itemData.audioDataUrl) {
+  //   audioPlayer.src = itemData.audioDataUrl;
+  // }
 
   card.addEventListener("dragstart", (event) => {
     if (card.classList.contains("open")) {
@@ -549,16 +309,18 @@ const createItemNode = (itemData = {}) => {
   notesInput.addEventListener("input", persistCurrentItem);
   infoInput.addEventListener("input", syncMetronomeControls);
   metronomeBtn.addEventListener("click", async () => {
-    const config = getMetronomeConfig(infoInput.value);
+    const config = metronome.getConfig(infoInput.value, getMetronomeOptions());
     if (!config) return;
 
-    if (metronomeState.activeButton === metronomeBtn) {
-      stopMetronome();
+    if (metronome.isActiveButton(metronomeBtn)) {
+      metronome.stop();
       return;
     }
 
-    await startMetronome(card, metronomeBtn, config);
+    await metronome.start(card, metronomeBtn, config);
   });
+
+  card.syncMetronomeControls = syncMetronomeControls;
 
   return clone;
 };
@@ -639,6 +401,7 @@ if (scrollTopBtn) {
 
 const exportJsonBtn = document.getElementById("exportJsonBtn");
 const resetLocalBtn = document.getElementById("resetLocalBtn");
+const eighthNoteToggleBtn = document.getElementById("eighthNoteToggleBtn");
 
 const exportItemsJson = () => {
   const items = loadItems();
@@ -676,6 +439,24 @@ if (resetLocalBtn) {
   });
 }
 
+if (eighthNoteToggleBtn) {
+  const syncEighthNoteToggle = () => {
+    eighthNoteToggleBtn.setAttribute("aria-pressed", String(eighthNoteMode));
+    eighthNoteToggleBtn.setAttribute("aria-label", eighthNoteMode ? "4분 음표로 전환" : "8분 음표로 전환");
+    eighthNoteToggleBtn.title = eighthNoteMode ? "4분 음표로 전환" : "8분 음표로 전환";
+  };
+
+  eighthNoteToggleBtn.addEventListener("click", () => {
+    eighthNoteMode = !eighthNoteMode;
+    localStorage.setItem(EIGHTH_NOTE_MODE_KEY, String(eighthNoteMode));
+    syncEighthNoteToggle();
+    metronome.stop();
+    syncAllMetronomeControls();
+  });
+
+  syncEighthNoteToggle();
+}
+
 // Load theme, then ensure initial items are available (from localStorage or external file)
 async function loadInitialData() {
   if (!itemList || !itemTemplate) {
@@ -710,6 +491,7 @@ async function loadInitialData() {
 
 try {
   loadTheme();
+  metronome.ensureMedia();
 } catch (error) {
   console.warn("Could not sync theme:", error);
 }
