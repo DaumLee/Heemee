@@ -11,14 +11,47 @@ const DEFAULT_INFO_TEXT = "BPM: \nKey: \n구성: \n메모: ";
 const metronome = window.HeemeeMetronome;
 let touchDragState = null;
 let eighthNoteMode = localStorage.getItem(EIGHTH_NOTE_MODE_KEY) === "true";
+let activeAudioPlayer = null;
 
 const normalizeItem = (item) => ({
   ...item,
   info: item.info ?? DEFAULT_INFO_TEXT,
 });
 
+const mergeFileAudioUrls = (savedItems, fileItems) => {
+  const audioUrlById = new Map(
+    fileItems
+      .filter((item) => item.id && item.audioDataUrl)
+      .map((item) => [item.id, item.audioDataUrl]),
+  );
+
+  let changed = false;
+  const mergedItems = savedItems.map((item) => {
+    const fileAudioUrl = audioUrlById.get(item.id);
+    if (!fileAudioUrl || item.audioDataUrl === fileAudioUrl) {
+      return item;
+    }
+
+    changed = true;
+    return {
+      ...item,
+      audioDataUrl: fileAudioUrl,
+    };
+  });
+
+  return { changed, items: mergedItems };
+};
+
 const parseJsonText = (text) => {
   return JSON.parse(text.replace(/^\uFEFF/, ""));
+};
+
+const formatAudioTime = (seconds) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.floor(seconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${remainingSeconds}`;
 };
 
 const loadItems = () => {
@@ -43,7 +76,7 @@ const getItemDataFromCard = (card) => ({
   info: card.querySelector(".info")?.value || "",
   lyrics: card.querySelector(".lyrics")?.value || "",
   notes: card.querySelector(".notes")?.value || "",
-  audioDataUrl: card.querySelector(".audio-player")?.src || "",
+  audioDataUrl: card.querySelector(".audio-player")?.dataset.audioDataUrl || "",
 });
 
 const getItemsFromDom = () => {
@@ -61,6 +94,22 @@ const getMetronomeOptions = () => ({
 const syncAllMetronomeControls = () => {
   itemList?.querySelectorAll(".item-card").forEach((card) => {
     card.syncMetronomeControls?.();
+  });
+};
+
+const stopAudioPlayer = (audioPlayer, { reset = true } = {}) => {
+  audioPlayer.pause();
+  if (reset) {
+    audioPlayer.currentTime = 0;
+  }
+  audioPlayer.closest(".item-card")?.syncAudioControls?.();
+};
+
+const stopOtherAudioPlayers = (currentAudioPlayer) => {
+  itemList?.querySelectorAll(".audio-player").forEach((audioPlayer) => {
+    if (audioPlayer !== currentAudioPlayer && !audioPlayer.paused) {
+      stopAudioPlayer(audioPlayer);
+    }
   });
 };
 
@@ -199,9 +248,14 @@ const createItemNode = (itemData = {}) => {
   const toggle = clone.querySelector(".item-toggle");
   const title = clone.querySelector(".item-title");
   const details = clone.querySelector(".item-details");
-  // const audioPlayer = clone.querySelector(".audio-player");
+  const audioRow = clone.querySelector(".audio-row");
+  const audioPlayer = clone.querySelector(".audio-player");
+  const audioToggleBtn = clone.querySelector(".audio-toggle-btn");
+  const audioInlineToggleBtn = clone.querySelector(".audio-inline-toggle-btn");
+  const audioSeek = clone.querySelector(".audio-seek");
+  const audioTime = clone.querySelector(".audio-time");
+  const bpmText = clone.querySelector(".item-bpm");
   const metronomeBtn = clone.querySelector(".metronome-btn");
-  const metronomeBpm = clone.querySelector(".metronome-bpm");
   const infoInput = clone.querySelector(".info");
   const lyricsInput = clone.querySelector(".lyrics");
   const notesInput = clone.querySelector(".notes");
@@ -218,9 +272,44 @@ const createItemNode = (itemData = {}) => {
     persistDomOrder();
   };
 
+  const syncAudioControls = () => {
+    const hasAudio = Boolean(audioPlayer.dataset.audioDataUrl);
+    const isPlaying = hasAudio && !audioPlayer.paused && !audioPlayer.ended;
+    const duration = audioPlayer.duration || 0;
+    const currentTime = audioPlayer.currentTime || 0;
+    const seekValue = duration ? (currentTime / duration) * 100 : 0;
+
+    audioToggleBtn.disabled = !hasAudio;
+    audioToggleBtn.setAttribute("aria-pressed", String(isPlaying));
+    audioToggleBtn.setAttribute("aria-label", isPlaying ? "오디오 정지" : "오디오 재생");
+    audioToggleBtn.title = hasAudio ? (isPlaying ? "오디오 정지" : "오디오 재생") : "오디오 없음";
+    audioInlineToggleBtn.disabled = !hasAudio;
+    audioInlineToggleBtn.setAttribute("aria-pressed", String(isPlaying));
+    audioInlineToggleBtn.setAttribute("aria-label", isPlaying ? "오디오 정지" : "오디오 재생");
+    audioSeek.disabled = !hasAudio || !duration;
+    audioSeek.value = String(seekValue);
+    audioTime.textContent = `${formatAudioTime(currentTime)} / ${formatAudioTime(duration)}`;
+  };
+
+  const toggleAudioPlayback = async () => {
+    if (!audioPlayer.dataset.audioDataUrl) return;
+
+    if (!audioPlayer.paused && !audioPlayer.ended) {
+      stopAudioPlayer(audioPlayer);
+      if (activeAudioPlayer === audioPlayer) {
+        activeAudioPlayer = null;
+      }
+      return;
+    }
+
+    stopOtherAudioPlayers(audioPlayer);
+    await audioPlayer.play();
+  };
+
   const syncMetronomeControls = () => {
     const config = metronome.getConfig(infoInput.value, getMetronomeOptions());
-    metronomeBpm.textContent = config ? `${config.bpm} BPM · ${config.timeSignature.label}` : "BPM 없음";
+    bpmText.textContent = config ? `${config.bpm} BPM` : "";
+    bpmText.hidden = !config;
     metronomeBtn.disabled = !config;
     metronomeBtn.title = config
       ? `${config.bpm} BPM ${config.timeSignature.label} 메트로놈`
@@ -236,15 +325,6 @@ const createItemNode = (itemData = {}) => {
     textarea.style.height = `${textarea.scrollHeight}px`;
   };
 
-  // const getCurrentItem = () => ({
-  //   id: card.dataset.itemId,
-  //   name: card.dataset.itemName || "",
-  //   info: infoInput.value,
-  //   lyrics: lyricsInput.value,
-  //   notes: notesInput.value,
-  //   audioDataUrl: audioPlayer.src || "",
-  // });
-
   card.dataset.itemId = itemData.id || `item-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   card.dataset.itemName = itemData.name || "";
   infoInput.value = itemData.info ?? DEFAULT_INFO_TEXT;
@@ -255,9 +335,15 @@ const createItemNode = (itemData = {}) => {
   autoResizeTextArea(lyricsInput);
   autoResizeTextArea(notesInput);
   syncMetronomeControls();
-  // if (itemData.audioDataUrl) {
-  //   audioPlayer.src = itemData.audioDataUrl;
-  // }
+  const hasAudio = Boolean(itemData.audioDataUrl);
+  if (hasAudio) {
+    audioPlayer.dataset.audioDataUrl = itemData.audioDataUrl;
+    audioPlayer.src = itemData.audioDataUrl;
+    syncAudioControls();
+  } else {
+    audioToggleBtn.remove();
+    audioRow.remove();
+  }
 
   card.addEventListener("dragstart", (event) => {
     if (card.classList.contains("open")) {
@@ -308,6 +394,30 @@ const createItemNode = (itemData = {}) => {
   notesInput.addEventListener("input", () => autoResizeTextArea(notesInput));
   notesInput.addEventListener("input", persistCurrentItem);
   infoInput.addEventListener("input", syncMetronomeControls);
+  if (hasAudio) {
+    audioToggleBtn.addEventListener("click", toggleAudioPlayback);
+    audioInlineToggleBtn.addEventListener("click", toggleAudioPlayback);
+    audioSeek.addEventListener("input", () => {
+      if (!audioPlayer.duration) return;
+
+      audioPlayer.currentTime = (Number(audioSeek.value) / 100) * audioPlayer.duration;
+      syncAudioControls();
+    });
+    audioPlayer.addEventListener("play", () => {
+      stopOtherAudioPlayers(audioPlayer);
+      activeAudioPlayer = audioPlayer;
+      syncAudioControls();
+    });
+    audioPlayer.addEventListener("pause", syncAudioControls);
+    audioPlayer.addEventListener("timeupdate", syncAudioControls);
+    audioPlayer.addEventListener("loadedmetadata", syncAudioControls);
+    audioPlayer.addEventListener("ended", () => {
+      if (activeAudioPlayer === audioPlayer) {
+        activeAudioPlayer = null;
+      }
+      syncAudioControls();
+    });
+  }
   metronomeBtn.addEventListener("click", async () => {
     const config = metronome.getConfig(infoInput.value, getMetronomeOptions());
     if (!config) return;
@@ -321,6 +431,7 @@ const createItemNode = (itemData = {}) => {
   });
 
   card.syncMetronomeControls = syncMetronomeControls;
+  card.syncAudioControls = syncAudioControls;
 
   return clone;
 };
@@ -457,7 +568,7 @@ if (eighthNoteToggleBtn) {
   syncEighthNoteToggle();
 }
 
-// Load theme, then ensure initial items are available (from localStorage or external file)
+// Load theme, then ensure initial items are available from localStorage or data/items.json.
 async function loadInitialData() {
   if (!itemList || !itemTemplate) {
     console.error("Required item list elements are missing.");
@@ -465,24 +576,38 @@ async function loadInitialData() {
   }
 
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved && saved.length) {
-    renderItems();
-    return;
-  }
 
   try {
     const resp = await fetch("data/items.json", { cache: "no-store" });
     if (resp.ok) {
       const data = parseJsonText(await resp.text());
       if (Array.isArray(data)) {
-        saveItems(data.map(normalizeItem));
+        const fileItems = data.map(normalizeItem);
+
+        if (saved && saved.length) {
+          const savedItems = loadItems();
+          if (savedItems.length === 0) {
+            saveItems(fileItems);
+            renderItems();
+            return;
+          }
+
+          const merged = mergeFileAudioUrls(savedItems, fileItems);
+          if (merged.changed) {
+            saveItems(merged.items);
+          }
+          renderItems();
+          return;
+        }
+
+        saveItems(fileItems);
         renderItems();
         return;
       }
     }
     console.warn("Could not load data/items.json:", resp.status, resp.statusText);
   } catch (err) {
-    console.warn("Could not load external data/items.json:", err);
+    console.warn("Could not load data/items.json:", err);
   }
 
   // Fallback to rendering (empty state)

@@ -241,15 +241,6 @@ button {
   overflow-wrap: anywhere;
 }
 
-.metronome-bpm {
-  color: var(--text-muted);
-  font-size: 0.86rem;
-  font-weight: 700;
-  line-height: 1.35;
-  text-align: right;
-  white-space: nowrap;
-}
-
 .item-toggle {
   width: 44px;
   height: 44px;
@@ -271,6 +262,14 @@ button {
 
 .item-title {
   font-weight: 700;
+}
+
+.item-bpm {
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .item-chevron {
@@ -328,8 +327,7 @@ button {
 }
 
 .field-row textarea,
-.item-toggle,
-.audio-row audio {
+.item-toggle {
   cursor: default;
 }
 
@@ -348,10 +346,23 @@ button {
 }
 
 .audio-row audio {
-  width: 100%;
-  border-radius: 14px;
+  display: none;
 }
 
+.custom-audio-controls {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: var(--surface-strong);
+  border: 1px solid var(--border);
+}
+
+.audio-toggle-btn,
+.audio-inline-toggle-btn,
 .metronome-btn {
   width: 44px;
   height: 44px;
@@ -366,18 +377,24 @@ button {
   transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
+.audio-toggle-btn:hover,
+.audio-inline-toggle-btn:hover,
 .metronome-btn:hover {
   background: var(--button-primary);
   border-color: var(--button-primary);
   color: #fff;
 }
 
+.audio-toggle-btn[aria-pressed="true"],
+.audio-inline-toggle-btn[aria-pressed="true"],
 .metronome-btn[aria-pressed="true"] {
   background: #fee2e2;
   color: #991b1b;
   border-color: #fecaca;
 }
 
+.audio-toggle-btn[aria-pressed="true"]:hover,
+.audio-inline-toggle-btn[aria-pressed="true"]:hover,
 .metronome-btn[aria-pressed="true"]:hover {
   background: #fee2e2;
 }
@@ -386,14 +403,48 @@ button {
   transform: rotate(-8deg);
 }
 
+.audio-toggle-btn:disabled,
+.audio-inline-toggle-btn:disabled,
 .metronome-btn:disabled {
   cursor: not-allowed;
   opacity: 0.55;
 }
 
+.audio-play-icon,
+.audio-stop-icon,
 .metronome-icon {
   display: block;
   transition: transform 0.2s ease;
+}
+
+.audio-stop-icon,
+.audio-toggle-btn[aria-pressed="true"] .audio-play-icon,
+.audio-inline-toggle-btn[aria-pressed="true"] .audio-play-icon {
+  display: none;
+}
+
+.audio-toggle-btn[aria-pressed="true"] .audio-stop-icon,
+.audio-inline-toggle-btn[aria-pressed="true"] .audio-stop-icon {
+  display: block;
+}
+
+.audio-inline-toggle-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+}
+
+.audio-seek {
+  width: 100%;
+  min-width: 0;
+  accent-color: var(--button-primary);
+}
+
+.audio-time {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .actions-row {
@@ -453,11 +504,6 @@ button {
   .item-details {
     padding-left: 16px;
     padding-right: 16px;
-  }
-
-  .metronome-bpm {
-    min-width: 0;
-    white-space: normal;
   }
 }
 
