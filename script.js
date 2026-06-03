@@ -260,6 +260,7 @@ const createItemNode = (itemData = {}) => {
   const audioPlayer = clone.querySelector(".audio-player");
   const audioToggleBtn = clone.querySelector(".audio-toggle-btn");
   const audioSeek = clone.querySelector(".audio-seek");
+  const audioSkipBtns = [...clone.querySelectorAll(".audio-skip-btn")];
   const audioTime = clone.querySelector(".audio-time");
   const bpmText = clone.querySelector(".item-bpm");
   const metronomeBtn = clone.querySelector(".metronome-btn");
@@ -292,6 +293,9 @@ const createItemNode = (itemData = {}) => {
     audioToggleBtn.title = hasAudio ? (isPlaying ? "오디오 정지" : "오디오 재생") : "오디오 없음";
     audioSeek.disabled = !hasAudio || !duration;
     audioSeek.value = String(seekValue);
+    audioSkipBtns.forEach((button) => {
+      button.disabled = !hasAudio || !duration;
+    });
     audioTime.textContent = `${formatAudioTime(currentTime)} / ${formatAudioTime(duration)}`;
   };
 
@@ -407,6 +411,16 @@ const createItemNode = (itemData = {}) => {
   infoInput.addEventListener("input", syncMetronomeControls);
   if (hasAudio) {
     audioToggleBtn.addEventListener("click", toggleAudioPlayback);
+    audioSkipBtns.forEach((button) => {
+      button.addEventListener("click", () => {
+        const duration = audioPlayer.duration || 0;
+        if (!duration) return;
+
+        const skipSeconds = Number(button.dataset.skipSeconds) || 0;
+        audioPlayer.currentTime = Math.min(Math.max(audioPlayer.currentTime + skipSeconds, 0), duration);
+        syncAudioControls();
+      });
+    });
     audioSeek.addEventListener("input", () => {
       if (!audioPlayer.duration) return;
 

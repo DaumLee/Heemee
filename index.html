@@ -19,7 +19,7 @@
           내보내기
         </button>
         <button id="resetLocalBtn" class="reset-local-btn" type="button">로컬 초기화</button>
-        <button id="eighthNoteToggleBtn" class="eighth-note-toggle-btn" type="button" aria-label="8분 음표 전환" aria-pressed="false">
+        <button id="eighthNoteToggleBtn" class="eighth-note-toggle-btn" type="button" aria-label="8분 음표로 전환" aria-pressed="false">
           <svg class="note-icon note-icon-quarter" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M13.2 4.2v12.2" fill="none" stroke="currentColor" stroke-width="2.15" stroke-linecap="round"/>
             <ellipse cx="10" cy="17.1" rx="4.2" ry="2.9" transform="rotate(-24 10 17.1)" fill="currentColor"/>
@@ -72,6 +72,20 @@
       <div class="field-row audio-row">
         <audio preload="metadata" class="audio-player"></audio>
         <div class="custom-audio-controls">
+          <button type="button" class="audio-skip-btn audio-skip-back" data-skip-seconds="-10" aria-label="10초 뒤로">
+            <svg width="23" height="23" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M2.4 12a9.6 9.6 0 1 0 9.6-9.6 10.35 10.35 0 0 0-7.16 2.91L2.4 8.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M2.7 3.1v5.1h5.1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="audio-skip-label">10</span>
+          </button>
+          <button type="button" class="audio-skip-btn audio-skip-forward" data-skip-seconds="10" aria-label="10초 앞으로">
+            <svg width="23" height="23" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21.6 12a9.6 9.6 0 1 1-9.6-9.6 10.35 10.35 0 0 1 7.16 2.91L21.6 8.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M21.3 3.1v5.1h-5.1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="audio-skip-label">10</span>
+          </button>
           <input type="range" class="audio-seek" min="0" max="100" value="0" step="0.1" aria-label="오디오 위치" />
           <span class="audio-time"></span>
         </div>

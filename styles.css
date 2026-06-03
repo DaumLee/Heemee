@@ -353,7 +353,7 @@ button {
 .custom-audio-controls {
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   padding: 8px 10px;
@@ -363,6 +363,7 @@ button {
 }
 
 .audio-toggle-btn,
+.audio-skip-btn,
 .metronome-btn {
   width: 44px;
   height: 44px;
@@ -378,6 +379,7 @@ button {
 }
 
 .audio-toggle-btn:hover,
+.audio-skip-btn:hover,
 .metronome-btn:hover {
   background: var(--button-primary);
   border-color: var(--button-primary);
@@ -401,6 +403,7 @@ button {
 }
 
 .audio-toggle-btn:disabled,
+.audio-skip-btn:disabled,
 .metronome-btn:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -408,9 +411,29 @@ button {
 
 .audio-play-icon,
 .audio-stop-icon,
+.audio-skip-btn svg,
 .metronome-icon {
   display: block;
   transition: transform 0.2s ease;
+}
+
+.audio-skip-btn {
+  position: relative;
+  width: 35px;
+  height: 35px;
+  color: var(--text-muted);
+  border-radius: 10px;
+}
+
+.audio-skip-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  line-height: 1;
+  font-size: 8px;
+  font-weight: 800;
+  transform: translate(-50%, -42%);
+  pointer-events: none;
 }
 
 .audio-stop-icon,
@@ -461,6 +484,23 @@ button {
   .item-details {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .audio-row {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .custom-audio-controls {
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    gap: 5px;
+    padding: 5px;
+  }
+
+  .audio-time {
+    grid-column: auto;
+    justify-self: auto;
+    font-size: 0.72rem;
   }
 }
 
