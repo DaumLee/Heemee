@@ -295,14 +295,21 @@ button {
   gap: 10px;
 }
 
+.audio-row {
+  display: none;
+  padding: 0 24px 18px;
+}
+
+.item-card.audio-controls-visible .audio-row {
+  display: grid;
+}
+
 .field-row label {
   font-weight: 700;
   color: var(--text);
 }
 
-.field-row input[type="text"],
-.field-row textarea,
-.field-row input[type="file"] {
+.field-row textarea {
   width: 100%;
   padding: 12px 14px;
   border: none;
@@ -318,12 +325,6 @@ button {
   min-height: 90px;
   overflow: hidden;
   resize: vertical;
-}
-
-.field-row textarea.info {
-  min-height: 0;
-  padding-top: 8px;
-  padding-bottom: 8px;
 }
 
 .field-row textarea,
@@ -352,7 +353,7 @@ button {
 .custom-audio-controls {
   width: 100%;
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   padding: 8px 10px;
@@ -362,7 +363,6 @@ button {
 }
 
 .audio-toggle-btn,
-.audio-inline-toggle-btn,
 .metronome-btn {
   width: 44px;
   height: 44px;
@@ -378,7 +378,6 @@ button {
 }
 
 .audio-toggle-btn:hover,
-.audio-inline-toggle-btn:hover,
 .metronome-btn:hover {
   background: var(--button-primary);
   border-color: var(--button-primary);
@@ -386,7 +385,6 @@ button {
 }
 
 .audio-toggle-btn[aria-pressed="true"],
-.audio-inline-toggle-btn[aria-pressed="true"],
 .metronome-btn[aria-pressed="true"] {
   background: #fee2e2;
   color: #991b1b;
@@ -394,7 +392,6 @@ button {
 }
 
 .audio-toggle-btn[aria-pressed="true"]:hover,
-.audio-inline-toggle-btn[aria-pressed="true"]:hover,
 .metronome-btn[aria-pressed="true"]:hover {
   background: #fee2e2;
 }
@@ -404,7 +401,6 @@ button {
 }
 
 .audio-toggle-btn:disabled,
-.audio-inline-toggle-btn:disabled,
 .metronome-btn:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -418,20 +414,12 @@ button {
 }
 
 .audio-stop-icon,
-.audio-toggle-btn[aria-pressed="true"] .audio-play-icon,
-.audio-inline-toggle-btn[aria-pressed="true"] .audio-play-icon {
+.audio-toggle-btn[aria-pressed="true"] .audio-play-icon {
   display: none;
 }
 
-.audio-toggle-btn[aria-pressed="true"] .audio-stop-icon,
-.audio-inline-toggle-btn[aria-pressed="true"] .audio-stop-icon {
+.audio-toggle-btn[aria-pressed="true"] .audio-stop-icon {
   display: block;
-}
-
-.audio-inline-toggle-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
 }
 
 .audio-seek {
@@ -445,37 +433,6 @@ button {
   font-size: 0.84rem;
   font-weight: 700;
   white-space: nowrap;
-}
-
-.actions-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 6px;
-}
-
-.save-btn,
-.remove-btn {
-  padding: 10px 16px;
-  border-radius: 12px;
-}
-
-.save-btn {
-  background: #16a34a;
-  color: white;
-}
-
-.save-btn:hover {
-  background: #15803d;
-}
-
-.remove-btn {
-  background: #ef4444;
-  color: white;
-}
-
-.remove-btn:hover {
-  background: #dc2626;
 }
 
 @media (max-width: 640px) {

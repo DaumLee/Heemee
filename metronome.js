@@ -13,7 +13,6 @@ const HeemeeMetronome = (() => {
     audioContext: null,
     timerId: null,
     activeButton: null,
-    activeCard: null,
     beat: 0,
     nextClickTime: 0,
   };
@@ -63,7 +62,6 @@ const HeemeeMetronome = (() => {
       ...state,
       timerId: null,
       activeButton: null,
-      activeCard: null,
       beat: 0,
       nextClickTime: 0,
     };
@@ -160,12 +158,11 @@ const HeemeeMetronome = (() => {
     state.timerId = window.setInterval(scheduleClicks, 25);
   };
 
-  const start = async (card, button, config) => {
+  const start = async (button, config) => {
     stop();
     ensureMedia();
 
     state.activeButton = button;
-    state.activeCard = card;
     state.beat = 0;
     setButtonState(button, true);
 

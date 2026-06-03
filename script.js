@@ -107,11 +107,10 @@ const syncAllMetronomeControls = () => {
   });
 };
 
-const stopAudioPlayer = (audioPlayer, { reset = true } = {}) => {
+const stopAudioPlayer = (audioPlayer) => {
   audioPlayer.pause();
-  if (reset) {
-    audioPlayer.currentTime = 0;
-  }
+  audioPlayer.currentTime = 0;
+  audioPlayer.closest(".item-card")?.classList.remove("audio-controls-visible");
   audioPlayer.closest(".item-card")?.syncAudioControls?.();
 };
 
@@ -257,11 +256,9 @@ const createItemNode = (itemData = {}) => {
   const card = clone.querySelector(".item-card");
   const toggle = clone.querySelector(".item-toggle");
   const title = clone.querySelector(".item-title");
-  const details = clone.querySelector(".item-details");
   const audioRow = clone.querySelector(".audio-row");
   const audioPlayer = clone.querySelector(".audio-player");
   const audioToggleBtn = clone.querySelector(".audio-toggle-btn");
-  const audioInlineToggleBtn = clone.querySelector(".audio-inline-toggle-btn");
   const audioSeek = clone.querySelector(".audio-seek");
   const audioTime = clone.querySelector(".audio-time");
   const bpmText = clone.querySelector(".item-bpm");
@@ -293,9 +290,6 @@ const createItemNode = (itemData = {}) => {
     audioToggleBtn.setAttribute("aria-pressed", String(isPlaying));
     audioToggleBtn.setAttribute("aria-label", isPlaying ? "오디오 정지" : "오디오 재생");
     audioToggleBtn.title = hasAudio ? (isPlaying ? "오디오 정지" : "오디오 재생") : "오디오 없음";
-    audioInlineToggleBtn.disabled = !hasAudio;
-    audioInlineToggleBtn.setAttribute("aria-pressed", String(isPlaying));
-    audioInlineToggleBtn.setAttribute("aria-label", isPlaying ? "오디오 정지" : "오디오 재생");
     audioSeek.disabled = !hasAudio || !duration;
     audioSeek.value = String(seekValue);
     audioTime.textContent = `${formatAudioTime(currentTime)} / ${formatAudioTime(duration)}`;
@@ -313,7 +307,14 @@ const createItemNode = (itemData = {}) => {
     }
 
     stopOtherAudioPlayers(audioPlayer);
-    await audioPlayer.play();
+    card.classList.add("audio-controls-visible");
+    try {
+      await audioPlayer.play();
+    } catch (error) {
+      card.classList.remove("audio-controls-visible");
+      syncAudioControls();
+      throw error;
+    }
   };
 
   const syncMetronomeControls = () => {
@@ -406,7 +407,6 @@ const createItemNode = (itemData = {}) => {
   infoInput.addEventListener("input", syncMetronomeControls);
   if (hasAudio) {
     audioToggleBtn.addEventListener("click", toggleAudioPlayback);
-    audioInlineToggleBtn.addEventListener("click", toggleAudioPlayback);
     audioSeek.addEventListener("input", () => {
       if (!audioPlayer.duration) return;
 
@@ -425,6 +425,7 @@ const createItemNode = (itemData = {}) => {
       if (activeAudioPlayer === audioPlayer) {
         activeAudioPlayer = null;
       }
+      card.classList.remove("audio-controls-visible");
       syncAudioControls();
     });
   }
@@ -437,7 +438,7 @@ const createItemNode = (itemData = {}) => {
       return;
     }
 
-    await metronome.start(card, metronomeBtn, config);
+    await metronome.start(metronomeBtn, config);
   });
 
   card.syncMetronomeControls = syncMetronomeControls;
